@@ -11,8 +11,13 @@ public sealed record Settings(
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
 
-    public static Settings FromEnvironment()
+    public static Settings FromEnvironment() => From(Environment.GetEnvironmentVariable);
+
+    public static Settings From(Func<string, string?> environment)
     {
+        string? Env(string name) => environment(name) is { Length: > 0 } value ? value : null;
+        int Number(string name, int fallback) => int.TryParse(Env(name), out var value) ? value : fallback;
+
         var baseUrl = Env("HOMUNCULUS_BASE_URL") ?? DefaultBaseUrl;
         var model = Env("HOMUNCULUS_MODEL") ?? "gpt-5-mini";
         var apiKey = Env("OPENAI_API_KEY")
@@ -27,10 +32,4 @@ public sealed record Settings(
             Number("HOMUNCULUS_MAX_ITERATIONS", 8),
             Number("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24));
     }
-
-    private static string? Env(string name) =>
-        Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value : null;
-
-    private static int Number(string name, int fallback) =>
-        int.TryParse(Env(name), out var value) ? value : fallback;
 }

@@ -1,0 +1,34 @@
+namespace Homunculus.Tests.Support;
+
+public sealed class FakeUserInterface : IUserInterface
+{
+    private readonly Queue<string> _lines = new();
+    private readonly Queue<char> _choices = new();
+
+    public List<string> Output { get; } = [];
+    public List<string> Questions { get; } = [];
+
+    public string AllOutput => string.Join('\n', Output);
+
+    public FakeUserInterface TypesLines(params string[] lines)
+    {
+        foreach (var line in lines) _lines.Enqueue(line);
+        return this;
+    }
+
+    public FakeUserInterface Answers(params char[] choices)
+    {
+        foreach (var choice in choices) _choices.Enqueue(choice);
+        return this;
+    }
+
+    public void Show(string text) => Output.Add(text);
+
+    public char Choose(string question, string options)
+    {
+        Questions.Add(question);
+        return _choices.Count > 0 ? _choices.Dequeue() : throw new InvalidOperationException("Unexpected question: " + question);
+    }
+
+    public string? ReadLine() => _lines.Count > 0 ? _lines.Dequeue() : null;
+}
