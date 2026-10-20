@@ -22,7 +22,7 @@ public sealed class OpenAiModel(HttpClient http, string model) : ILanguageModel
     {
         var request = OpenAiJson.Request(model, conversation, tools);
 
-        using var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
+        using var content = new StringContent(request, Encoding.UTF8, "application/json");
         using var response = await http.PostAsync("chat/completions", content, cancellation);
         var body = await response.Content.ReadAsStringAsync(cancellation);
 

@@ -1,83 +1,57 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Homunculus.Llm;
 
 /// <summary>Converts between our messages and the OpenAI chat-completions JSON.</summary>
 public static class OpenAiJson
 {
-    public static JsonObject Request(string model, IReadOnlyList<Message> conversation, IReadOnlyList<ToolSpec> tools)
+    private static readonly JsonSerializerOptions Options = new()
     {
-        var request = new JsonObject
-        {
-            ["model"] = model,
-            ["messages"] = new JsonArray(conversation.Select(ToJson).ToArray()),
-        };
-        if (tools.Count > 0)
-            request["tools"] = new JsonArray(tools.Select(ToJson).ToArray());
-        return request;
-    }
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    public static string Request(string model, IReadOnlyList<Message> conversation, IReadOnlyList<ToolSpec> tools) =>
+        JsonSerializer.Serialize(new OpenAiWire.Request(
+            model,
+            conversation.Select(ToWire).ToList(),
+            tools.Count > 0 ? tools.Select(ToWire).ToList() : null), Options);
 
     /// <exception cref="FormatException">The body is not a chat-completions reply.</exception>
     public static Message Reply(string body)
     {
         try
         {
-            var message = JsonNode.Parse(body)?["choices"]?.AsArray().FirstOrDefault()?["message"]
+            var message = JsonSerializer.Deserialize<OpenAiWire.Reply>(body, Options)?.Choices?.FirstOrDefault()?.Message
                 ?? throw new FormatException("no choices[0].message");
-            var calls = message["tool_calls"]?.AsArray().Select(ToolCallFromJson).ToList();
-            return new Message(Role.Assistant, message["content"]?.GetValue<string>(), calls);
+            return new Message(Role.Assistant, message.Content, message.ToolCalls?.Select(FromWire).ToList());
         }
-        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        catch (JsonException e)
         {
             throw new FormatException(e.Message, e);
         }
     }
 
-    private static JsonNode ToJson(Message message)
-    {
-        var json = new JsonObject
-        {
-            ["role"] = message.Role.ToString().ToLowerInvariant(),
-            ["content"] = message.Content,
-        };
-        if (message.ToolCallId is not null)
-            json["tool_call_id"] = message.ToolCallId;
-        if (message.HasToolCalls)
-            json["tool_calls"] = new JsonArray(message.ToolCalls!.Select(ToJson).ToArray());
-        return json;
-    }
+    private static OpenAiWire.Message ToWire(Message message) => new(
+        message.Role.ToString().ToLowerInvariant(),
+        message.Content,
+        message.ToolCalls?.Select(ToWire).ToList(),
+        message.ToolCallId);
 
-    private static JsonNode ToJson(ToolCall call) => new JsonObject
-    {
-        ["id"] = call.Id,
-        ["type"] = "function",
-        ["function"] = new JsonObject
-        {
-            ["name"] = call.Name,
-            ["arguments"] = call.Arguments.GetRawText(),
-        },
-    };
+    private static OpenAiWire.ToolCall ToWire(ToolCall call) =>
+        new(call.Id, "function", new OpenAiWire.FunctionCall(call.Name, call.Arguments.GetRawText()));
 
-    private static JsonNode ToJson(ToolSpec spec) => new JsonObject
-    {
-        ["type"] = "function",
-        ["function"] = new JsonObject
-        {
-            ["name"] = spec.Name,
-            ["description"] = spec.Description,
-            ["parameters"] = spec.Parameters.DeepClone(),
-        },
-    };
+    private static OpenAiWire.Tool ToWire(ToolSpec spec) =>
+        new("function", new OpenAiWire.FunctionSpec(spec.Name, spec.Description, spec.Parameters));
 
-    private static ToolCall ToolCallFromJson(JsonNode? json)
+    private static ToolCall FromWire(OpenAiWire.ToolCall call)
     {
-        var function = json?["function"] ?? throw new FormatException("tool call without function");
-        var arguments = function["arguments"]?.GetValue<string>();
-        using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(arguments) ? "{}" : arguments);
+        var function = call.Function ?? throw new FormatException("tool call without function");
+        using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(function.Arguments) ? "{}" : function.Arguments);
         return new ToolCall(
-            json["id"]?.GetValue<string>() ?? throw new FormatException("tool call without id"),
-            function["name"]?.GetValue<string>() ?? throw new FormatException("tool call without name"),
+            call.Id ?? throw new FormatException("tool call without id"),
+            function.Name ?? throw new FormatException("tool call without name"),
             document.RootElement.Clone());
     }
 }
