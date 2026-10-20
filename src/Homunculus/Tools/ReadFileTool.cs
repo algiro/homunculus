@@ -8,7 +8,7 @@ public sealed class ReadFileTool(ProjectDirectory project) : FileTool(project)
     public override string Name => "read_file";
     public override string Description => $"Read a text file (at most {Limits.OutputChars} characters).";
     public override JsonObject Parameters => Schema.Strings(1, ("path", "File to read."));
-    public override ToolAccess Access => ToolAccess.Read;
+    protected override ToolAccess Access => ToolAccess.Read;
 
     protected override string Run(JsonElement arguments, string path)
     {

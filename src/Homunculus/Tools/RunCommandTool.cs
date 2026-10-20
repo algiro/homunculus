@@ -10,9 +10,8 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout) :
     public string Name => "run_command";
     public string Description => "Run a shell command line in the project directory and return its output and exit code.";
     public JsonObject Parameters => Schema.Strings(1, ("command", "The command line to run."));
-    public ToolAccess Access => ToolAccess.Command;
 
-    public string? TargetPath(JsonElement arguments) => null;
+    public ToolEffect EffectOf(JsonElement arguments) => ToolEffect.Running;
 
     public async Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation)
     {

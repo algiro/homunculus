@@ -72,11 +72,6 @@ public class RunCommandToolTests
     }
 
     [Test]
-    public void IsACommandWithoutAFileTarget()
-    {
-        var tool = ToolWithTimeout(TimeSpan.FromSeconds(1));
-
-        Assert.That(tool.Access, Is.EqualTo(ToolAccess.Command));
-        Assert.That(tool.TargetPath(Json.Parse("{}")), Is.Null);
-    }
+    public void IsACommandWithoutAFileTarget() =>
+        Assert.That(ToolWithTimeout(TimeSpan.FromSeconds(1)).EffectOf(Json.Parse("{}")), Is.EqualTo(ToolEffect.Running));
 }

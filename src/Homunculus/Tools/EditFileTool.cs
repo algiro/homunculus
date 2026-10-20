@@ -13,7 +13,7 @@ public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
         ("path", "File to edit or create."),
         ("old_str", "Exact text to replace; must match exactly once. Empty to create a file."),
         ("new_str", "Replacement text."));
-    public override ToolAccess Access => ToolAccess.Write;
+    protected override ToolAccess Access => ToolAccess.Write;
 
     protected override string Run(JsonElement arguments, string path)
     {

@@ -44,5 +44,7 @@ public class DeleteFileToolTests
     public void FailsForAMissingFile() => Assert.ThrowsAsync<ToolException>(() => Run("nope.txt"));
 
     [Test]
-    public void IsAWriteOperation() => Assert.That(_tool.Access, Is.EqualTo(ToolAccess.Write));
+    public void WritesTheGivenFile() =>
+        Assert.That(_tool.EffectOf(Json.Parse("""{"path":"a.txt"}""")),
+            Is.EqualTo(new ToolEffect(ToolAccess.Write, _project.Location.Resolve("a.txt"))));
 }

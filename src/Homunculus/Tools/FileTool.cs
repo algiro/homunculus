@@ -11,12 +11,14 @@ public abstract class FileTool(ProjectDirectory project) : ITool
     public abstract string Name { get; }
     public abstract string Description { get; }
     public abstract JsonObject Parameters { get; }
-    public abstract ToolAccess Access { get; }
+    protected abstract ToolAccess Access { get; }
 
-    public virtual string? TargetPath(JsonElement arguments) => Project.Resolve(arguments.Text("path"));
+    public ToolEffect EffectOf(JsonElement arguments) => new(Access, PathOf(arguments));
 
     public Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation) =>
-        Task.FromResult(Run(arguments, TargetPath(arguments)!));
+        Task.FromResult(Run(arguments, PathOf(arguments)));
+
+    protected virtual string PathOf(JsonElement arguments) => Project.Resolve(arguments.Text("path"));
 
     protected abstract string Run(JsonElement arguments, string path);
 }

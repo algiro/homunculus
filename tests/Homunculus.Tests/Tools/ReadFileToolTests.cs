@@ -49,5 +49,7 @@ public class ReadFileToolTests
         Assert.ThrowsAsync<ToolException>(() => _tool.RunAsync(Json.Parse("[]"), CancellationToken.None));
 
     [Test]
-    public void IsAReadOperation() => Assert.That(_tool.Access, Is.EqualTo(ToolAccess.Read));
+    public void ReadsTheGivenFile() =>
+        Assert.That(_tool.EffectOf(Json.Parse("""{"path":"a.txt"}""")),
+            Is.EqualTo(new ToolEffect(ToolAccess.Read, _project.Location.Resolve("a.txt"))));
 }

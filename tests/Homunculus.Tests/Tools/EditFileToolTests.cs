@@ -98,5 +98,7 @@ public class EditFileToolTests
             _tool.RunAsync(Json.Parse("""{"path":"a.txt","old_str":""}"""), CancellationToken.None));
 
     [Test]
-    public void IsAWriteOperation() => Assert.That(_tool.Access, Is.EqualTo(ToolAccess.Write));
+    public void WritesTheGivenFile() =>
+        Assert.That(_tool.EffectOf(Json.Parse("""{"path":"a.txt"}""")),
+            Is.EqualTo(new ToolEffect(ToolAccess.Write, _project.Location.Resolve("a.txt"))));
 }

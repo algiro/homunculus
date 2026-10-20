@@ -47,9 +47,6 @@ public class PlanToolTests
     public void FailsWhenTheArgumentsAreNotAnObject() => Assert.ThrowsAsync<ToolException>(() => Run("[]"));
 
     [Test]
-    public void IsAPlanWithoutAFileTarget()
-    {
-        Assert.That(_tool.Access, Is.EqualTo(ToolAccess.Plan));
-        Assert.That(_tool.TargetPath(Json.Parse("{}")), Is.Null);
-    }
+    public void IsAPlanWithoutAFileTarget() =>
+        Assert.That(_tool.EffectOf(Json.Parse("{}")), Is.EqualTo(ToolEffect.Planning));
 }

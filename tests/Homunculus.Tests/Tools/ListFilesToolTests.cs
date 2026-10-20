@@ -55,9 +55,11 @@ public class ListFilesToolTests
         Assert.ThrowsAsync<ToolException>(() => _tool.RunAsync(Json.Parse("""{"path":"nope"}"""), CancellationToken.None));
 
     [Test]
-    public void TargetsTheProjectRootByDefault() =>
-        Assert.That(_tool.TargetPath(Json.Parse("{}")), Is.EqualTo(_project.Root));
+    public void ReadsTheProjectRootByDefault() =>
+        Assert.That(_tool.EffectOf(Json.Parse("{}")), Is.EqualTo(new ToolEffect(ToolAccess.Read, _project.Root)));
 
     [Test]
-    public void IsAReadOperation() => Assert.That(_tool.Access, Is.EqualTo(ToolAccess.Read));
+    public void ReadsTheGivenFolder() =>
+        Assert.That(_tool.EffectOf(Json.Parse("""{"path":"src"}""")),
+            Is.EqualTo(new ToolEffect(ToolAccess.Read, _project.Location.Resolve("src"))));
 }
