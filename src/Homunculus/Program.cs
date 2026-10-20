@@ -31,16 +31,14 @@ var tools = new ToolRegistry(
     new PlanTool(),
 ]);
 
-var approvals = new Approvals(
-    new ProjectBoundary(project),
-    new Dictionary<string, IPolicy>
-    {
-        ["judge"] = new JudgePolicy(ModelNamed(settings.JudgeModel)),
-        ["effect"] = new FixedPolicy(Verdict.Ask),
-        ["allow-all"] = new FixedPolicy(Verdict.Allow),
-    },
-    ui);
+var modes = new SwitchablePolicy(new Dictionary<string, IPolicy>
+{
+    ["judge"] = new JudgePolicy(ModelNamed(settings.JudgeModel)),
+    ["effect"] = new FixedPolicy(Verdict.Ask),
+    ["allow-all"] = new FixedPolicy(Verdict.Allow),
+});
+var approvals = new Approvals(new ProjectBoundaryPolicy(project, modes), ui);
 
 var agent = new Agent(ModelNamed(settings.Model), tools, approvals, ui, settings);
-await new Repl(agent, approvals, tools, ui).RunAsync();
+await new Repl(agent, modes, tools, ui).RunAsync();
 return 0;

@@ -105,30 +105,4 @@ public class ApprovalsTests
         Assert.That(await Check("run_command", Command), Is.Null);
         Assert.That(_app.Ui.Questions, Has.Count.EqualTo(1));
     }
-
-    [Test]
-    public void StartsInTheFirstConfiguredMode()
-    {
-        _app = new TestApp(new ScriptedModel(), "effect");
-
-        Assert.That(_app.Approvals.Mode, Is.EqualTo("effect"));
-    }
-
-    [Test]
-    public void SwitchesToAKnownMode()
-    {
-        _app = new TestApp(new ScriptedModel(), "effect");
-
-        Assert.That(_app.Approvals.TrySetMode("allow-all"), Is.True);
-        Assert.That(_app.Approvals.Mode, Is.EqualTo("allow-all"));
-    }
-
-    [Test]
-    public void KeepsTheModeWhenAskedForAnUnknownOne()
-    {
-        _app = new TestApp(new ScriptedModel(), "effect");
-
-        Assert.That(_app.Approvals.TrySetMode("bogus"), Is.False);
-        Assert.That(_app.Approvals.Mode, Is.EqualTo("effect"));
-    }
 }

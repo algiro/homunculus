@@ -4,7 +4,7 @@ using Homunculus.Tools;
 namespace Homunculus;
 
 /// <summary>Reads lines from the user: slash commands are handled here, anything else goes to the agent.</summary>
-public sealed class Repl(Agent agent, Approvals approvals, ToolRegistry tools, IUserInterface ui)
+public sealed class Repl(Agent agent, SwitchablePolicy policy, ToolRegistry tools, IUserInterface ui)
 {
     private const string Help =
         "/help          show this help\n" +
@@ -66,9 +66,9 @@ public sealed class Repl(Agent agent, Approvals approvals, ToolRegistry tools, I
 
     private void SetPolicy(string? mode)
     {
-        if (mode is not null && !approvals.TrySetMode(mode))
-            ui.Show($"Unknown mode. Choose one of: {string.Join(", ", approvals.Modes)}.");
+        if (mode is not null && !policy.TrySetMode(mode))
+            ui.Show($"Unknown mode. Choose one of: {string.Join(", ", policy.Modes)}.");
         else
-            ui.Show($"Policy: {approvals.Mode} (modes: {string.Join(", ", approvals.Modes)})");
+            ui.Show($"Policy: {policy.Mode} (modes: {string.Join(", ", policy.Modes)})");
     }
 }

@@ -3,31 +3,18 @@ using Homunculus.Tools;
 
 namespace Homunculus.Policy;
 
-public sealed class Approvals(
-    ProjectBoundary boundary,
-    IReadOnlyDictionary<string, IPolicy> policies,
-    IUserInterface ui)
+/// <summary>Turns the policy's verdict into a decision, asking the user when the policy is unsure.</summary>
+public sealed class Approvals(IPolicy policy, IUserInterface ui)
 {
     private readonly HashSet<string> _alwaysAllowed = [];
-
-    public string Mode { get; private set; } = policies.Keys.First();
-
-    public IEnumerable<string> Modes => policies.Keys;
-
-    public bool TrySetMode(string mode)
-    {
-        if (!policies.ContainsKey(mode)) return false;
-        Mode = mode;
-        return true;
-    }
 
     /// <summary>Returns null when the call may run, otherwise the reason it must not.</summary>
     public async Task<string?> CheckAsync(ITool tool, JsonElement arguments, CancellationToken cancellation)
     {
-        if (boundary.IsSafe(tool, arguments) || _alwaysAllowed.Contains(tool.Name))
+        if (_alwaysAllowed.Contains(tool.Name))
             return null;
 
-        return await policies[Mode].EvaluateAsync(tool, arguments, cancellation) switch
+        return await policy.EvaluateAsync(tool, arguments, cancellation) switch
         {
             Verdict.Allow => null,
             Verdict.Deny => "Denied by the policy judge.",

@@ -95,7 +95,7 @@ public class ReplTests
     {
         await Run(new ScriptedModel(), "/policy allow-all");
 
-        Assert.That(_app.Approvals.Mode, Is.EqualTo("allow-all"));
+        Assert.That(_app.Policy.Mode, Is.EqualTo("allow-all"));
         Assert.That(_app.Ui.AllOutput, Does.Contain("Policy: allow-all"));
     }
 
@@ -104,7 +104,7 @@ public class ReplTests
     {
         await Run(new ScriptedModel(), "/policy bogus");
 
-        Assert.That(_app.Approvals.Mode, Is.EqualTo("effect"));
+        Assert.That(_app.Policy.Mode, Is.EqualTo("effect"));
         Assert.That(_app.Ui.AllOutput, Does.Contain("Unknown mode"));
     }
 

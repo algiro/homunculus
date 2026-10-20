@@ -21,15 +21,13 @@ public sealed class TestApp : IDisposable
             new RunCommandTool(Project.Location, Settings.CommandTimeout),
             new PlanTool(),
         ]);
-        Approvals = new Approvals(
-            new ProjectBoundary(Project.Location),
-            new Dictionary<string, IPolicy>
-            {
-                [mode] = ModeFor(mode, judge),
-                ["effect"] = new FixedPolicy(Verdict.Ask),
-                ["allow-all"] = new FixedPolicy(Verdict.Allow),
-            },
-            Ui);
+        Policy = new SwitchablePolicy(new Dictionary<string, IPolicy>
+        {
+            [mode] = ModeFor(mode, judge),
+            ["effect"] = new FixedPolicy(Verdict.Ask),
+            ["allow-all"] = new FixedPolicy(Verdict.Allow),
+        });
+        Approvals = new Approvals(new ProjectBoundaryPolicy(Project.Location, Policy), Ui);
         Agent = new Agent(model, Tools, Approvals, Ui, Settings);
     }
 
@@ -40,10 +38,11 @@ public sealed class TestApp : IDisposable
     public FakeUserInterface Ui { get; }
     public Settings Settings { get; }
     public ToolRegistry Tools { get; }
+    public SwitchablePolicy Policy { get; }
     public Approvals Approvals { get; }
     public Agent Agent { get; }
 
-    public Repl NewRepl() => new(Agent, Approvals, Tools, Ui);
+    public Repl NewRepl() => new(Agent, Policy, Tools, Ui);
 
     public void Dispose() => Project.Dispose();
 
