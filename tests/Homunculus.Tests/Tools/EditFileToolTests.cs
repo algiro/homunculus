@@ -80,12 +80,13 @@ public class EditFileToolTests
     }
 
     [Test]
-    public void CountsOverlappingTextAsOneOccurrenceEachSoOnlyDistinctMatchesAreAmbiguous()
+    public async Task CountsMatchesWithoutOverlap()
     {
         _project.Write("a.txt", "aaa");
 
-        // "aa" occurs once when scanning without overlap past the first hit, then "a" remains.
-        Assert.DoesNotThrowAsync(() => Run("a.txt", "aa", "b"));
+        await Run("a.txt", "aa", "b");
+
+        Assert.That(_project.Read("a.txt"), Is.EqualTo("ba"));
     }
 
     [Test]

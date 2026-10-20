@@ -41,14 +41,14 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout) :
 
     private Process Start(string command)
     {
-        var shell = OperatingSystem.IsWindows() ? ("cmd.exe", "/c") : ("/bin/sh", "-c");
-        var info = new ProcessStartInfo(shell.Item1)
+        var (shell, runFlag) = OperatingSystem.IsWindows() ? ("cmd.exe", "/c") : ("/bin/sh", "-c");
+        var info = new ProcessStartInfo(shell)
         {
             WorkingDirectory = project.Root,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        info.ArgumentList.Add(shell.Item2);
+        info.ArgumentList.Add(runFlag);
         info.ArgumentList.Add(command);
         return Process.Start(info)!;
     }
