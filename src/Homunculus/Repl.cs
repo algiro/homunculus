@@ -1,19 +1,10 @@
-using Homunculus.Policy;
-using Homunculus.Tools;
+using Homunculus.Commands;
 
 namespace Homunculus;
 
-/// <summary>Reads lines from the user: slash commands are handled here, anything else goes to the agent.</summary>
-public sealed class Repl(Agent agent, SwitchablePolicy policy, ToolRegistry tools, IUserInterface ui)
+/// <summary>Reads lines from the user: slash commands go to the command registry, anything else goes to the agent.</summary>
+public sealed class Repl(Agent agent, CommandRegistry commands, IUserInterface ui)
 {
-    private const string Help =
-        "/help          show this help\n" +
-        "/tools         list the tools\n" +
-        "/policy [mode] show or set the approval mode\n" +
-        "/clear         forget the conversation\n" +
-        "/exit          quit\n" +
-        "ctrl-c         stop the current turn";
-
     public async Task RunAsync()
     {
         ui.Show("homunculus - type /help for commands.");
@@ -21,18 +12,31 @@ public sealed class Repl(Agent agent, SwitchablePolicy policy, ToolRegistry tool
         {
             var input = line.Trim();
             if (input.Length == 0) continue;
-            if (input == "/exit") return;
 
-            if (input.StartsWith('/')) HandleCommand(input);
-            else await TakeTurnAsync(input);
+            if (!input.StartsWith('/'))
+                await TakeTurnAsync(input);
+            else if (Execute(input) == CommandResult.Exit)
+                return;
         }
+    }
+
+    private CommandResult Execute(string input)
+    {
+        var parts = input.Split(' ', 2, StringSplitOptions.TrimEntries);
+        var command = commands.Find(parts[0]);
+        if (command is null)
+        {
+            ui.Show("Unknown command. Try /help.");
+            return CommandResult.Continue;
+        }
+
+        return command.Execute(parts.Length > 1 ? parts[1] : "");
     }
 
     private async Task TakeTurnAsync(string input)
     {
         using var turn = new CancellationTokenSource();
-        ConsoleCancelEventHandler stop = (_, e) => { e.Cancel = true; turn.Cancel(); };
-        Console.CancelKeyPress += stop;
+        using var listening = ui.ListenForCancel(turn.Cancel);
         try
         {
             await agent.RespondAsync(input, turn.Token);
@@ -45,30 +49,5 @@ public sealed class Repl(Agent agent, SwitchablePolicy policy, ToolRegistry tool
         {
             ui.Show($"Error: {e.Message}");
         }
-        finally
-        {
-            Console.CancelKeyPress -= stop;
-        }
-    }
-
-    private void HandleCommand(string input)
-    {
-        var parts = input.Split(' ', 2, StringSplitOptions.TrimEntries);
-        switch (parts[0])
-        {
-            case "/help": ui.Show(Help); break;
-            case "/tools": ui.Show(string.Join('\n', tools.All.Select(t => $"{t.Name} - {t.Description}"))); break;
-            case "/clear": agent.Clear(); ui.Show("Conversation cleared."); break;
-            case "/policy": SetPolicy(parts.Length > 1 ? parts[1] : null); break;
-            default: ui.Show("Unknown command. Try /help."); break;
-        }
-    }
-
-    private void SetPolicy(string? mode)
-    {
-        if (mode is not null && !policy.TrySetMode(mode))
-            ui.Show($"Unknown mode. Choose one of: {string.Join(", ", policy.Modes)}.");
-        else
-            ui.Show($"Policy: {policy.Mode} (modes: {string.Join(", ", policy.Modes)})");
     }
 }

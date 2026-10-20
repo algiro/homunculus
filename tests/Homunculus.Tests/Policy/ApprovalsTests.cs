@@ -1,108 +1,93 @@
+using Homunculus.Policy;
 using Homunculus.Tests.Support;
 using Homunculus.Tools;
+using NSubstitute;
 
 namespace Homunculus.Tests.Policy;
 
 public class ApprovalsTests
 {
-    private TestApp _app = null!;
+    private static readonly ITool Tool = new PlanTool();
+    private static readonly ITool OtherTool = new ListFilesTool(new ProjectDirectory("."));
 
-    [TearDown] public void TearDown() => _app.Dispose();
+    private IPolicy _policy = null!;
+    private FakeUserInterface _ui = null!;
+    private Approvals _approvals = null!;
 
-    private ITool Tool(string name) => _app.Tools.Find(name)!;
+    [SetUp]
+    public void SetUp()
+    {
+        _policy = Substitute.For<IPolicy>();
+        _ui = new FakeUserInterface();
+        _approvals = new Approvals(_policy, _ui);
+    }
 
-    private Task<string?> Check(string tool, string json) =>
-        _app.Approvals.CheckAsync(Tool(tool), Json.Parse(json), CancellationToken.None);
+    private void PolicyAnswers(Verdict verdict) =>
+        _policy.EvaluateAsync(default!, default, default).ReturnsForAnyArgs(verdict);
 
-    private const string Command = """{"command":"echo hi"}""";
+    private Task<string?> Check(ITool tool) =>
+        _approvals.CheckAsync(tool, Json.Parse("{}"), CancellationToken.None);
 
     [Test]
-    public async Task LetsCallsInsideTheProjectRunWithoutAskingAnyone()
+    public async Task LetsAnAllowedCallRunWithoutAsking()
     {
-        _app = new TestApp(new ScriptedModel(), "effect");
+        PolicyAnswers(Verdict.Allow);
 
-        Assert.That(await Check("read_file", """{"path":"a.txt"}"""), Is.Null);
-        Assert.That(_app.Ui.Questions, Is.Empty);
+        Assert.That(await Check(Tool), Is.Null);
+        Assert.That(_ui.Questions, Is.Empty);
     }
 
     [Test]
-    public async Task AllowAllNeverAsks()
+    public async Task RefusesADeniedCallWithoutAsking()
     {
-        _app = new TestApp(new ScriptedModel(), "allow-all");
+        PolicyAnswers(Verdict.Deny);
 
-        Assert.That(await Check("run_command", Command), Is.Null);
-        Assert.That(_app.Ui.Questions, Is.Empty);
+        Assert.That(await Check(Tool), Is.EqualTo("Denied by the policy."));
+        Assert.That(_ui.Questions, Is.Empty);
     }
 
     [Test]
-    public async Task EffectModeAsksTheUserAndAcceptsYes()
+    public async Task AsksTheUserWhenThePolicyIsUnsureAndAcceptsYes()
     {
-        _app = new TestApp(new ScriptedModel(), "effect");
-        _app.Ui.Answers('y');
+        PolicyAnswers(Verdict.Ask);
+        _ui.Answers('y');
 
-        Assert.That(await Check("run_command", Command), Is.Null);
-        Assert.That(_app.Ui.Questions.Single(), Does.Contain("run_command"));
+        Assert.That(await Check(Tool), Is.Null);
+        Assert.That(_ui.Questions.Single(), Does.Contain(Tool.Name));
     }
 
     [Test]
-    public async Task EffectModeRefusesWhenTheUserSaysNo()
+    public async Task RefusesWhenTheUserSaysNo()
     {
-        _app = new TestApp(new ScriptedModel(), "effect");
-        _app.Ui.Answers('n');
+        PolicyAnswers(Verdict.Ask);
+        _ui.Answers('n');
 
-        Assert.That(await Check("run_command", Command), Is.EqualTo("Refused by the user."));
+        Assert.That(await Check(Tool), Is.EqualTo("Refused by the user."));
     }
 
     [Test]
-    public async Task AlwaysRemembersTheToolAndStopsAsking()
+    public async Task AlwaysRemembersTheToolAndStopsAskingEvenThePolicy()
     {
-        _app = new TestApp(new ScriptedModel(), "effect");
-        _app.Ui.Answers('a');
+        PolicyAnswers(Verdict.Ask);
+        _ui.Answers('a');
 
-        await Check("run_command", Command);
-        var second = await Check("run_command", """{"command":"echo again"}""");
+        await Check(Tool);
+        var second = await Check(Tool);
 
         Assert.That(second, Is.Null);
-        Assert.That(_app.Ui.Questions, Has.Count.EqualTo(1));
+        Assert.That(_ui.Questions, Has.Count.EqualTo(1));
+        await _policy.ReceivedWithAnyArgs(1).EvaluateAsync(default!, default, default);
     }
 
     [Test]
     public async Task AlwaysOnlyAppliesToThatTool()
     {
-        _app = new TestApp(new ScriptedModel(), "effect");
-        _app.Ui.Answers('a', 'n');
+        PolicyAnswers(Verdict.Ask);
+        _ui.Answers('a', 'n');
 
-        await Check("run_command", Command);
-        var other = await Check("delete_file", """{"path":"../outside.txt"}""");
+        await Check(Tool);
+        var other = await Check(OtherTool);
 
         Assert.That(other, Is.EqualTo("Refused by the user."));
-    }
-
-    [Test]
-    public async Task JudgeModeAllowsWhenTheJudgeSaysAllow()
-    {
-        _app = new TestApp(new ScriptedModel(), "judge", new ScriptedModel(Reply.Text("allow")));
-
-        Assert.That(await Check("run_command", Command), Is.Null);
-        Assert.That(_app.Ui.Questions, Is.Empty);
-    }
-
-    [Test]
-    public async Task JudgeModeDeniesWhenTheJudgeSaysDeny()
-    {
-        _app = new TestApp(new ScriptedModel(), "judge", new ScriptedModel(Reply.Text("deny")));
-
-        Assert.That(await Check("run_command", Command), Is.EqualTo("Denied by the policy judge."));
-        Assert.That(_app.Ui.Questions, Is.Empty);
-    }
-
-    [Test]
-    public async Task JudgeModeAsksTheUserWhenTheJudgeIsUnsure()
-    {
-        _app = new TestApp(new ScriptedModel(), "judge", new ScriptedModel(Reply.Text("ask")));
-        _app.Ui.Answers('y');
-
-        Assert.That(await Check("run_command", Command), Is.Null);
-        Assert.That(_app.Ui.Questions, Has.Count.EqualTo(1));
     }
 }

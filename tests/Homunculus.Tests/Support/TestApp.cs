@@ -4,31 +4,17 @@ using Homunculus.Tools;
 
 namespace Homunculus.Tests.Support;
 
-/// <summary>The real agent, tools and policies wired together around a fake model and a fake user.</summary>
+/// <summary>The real application wired around a fake model, a fake user and a temporary project.</summary>
 public sealed class TestApp : IDisposable
 {
+    private readonly App _app;
+
     public TestApp(ILanguageModel model, string mode = "allow-all", ILanguageModel? judge = null, Settings? settings = null)
     {
         Project = new TempProject();
         Ui = new FakeUserInterface();
-        Settings = settings ?? DefaultSettings;
-        Tools = new ToolRegistry(
-        [
-            new ListFilesTool(Project.Location),
-            new ReadFileTool(Project.Location),
-            new EditFileTool(Project.Location),
-            new DeleteFileTool(Project.Location),
-            new RunCommandTool(Project.Location, Settings.CommandTimeout),
-            new PlanTool(),
-        ]);
-        Policy = new SwitchablePolicy(new Dictionary<string, IPolicy>
-        {
-            [mode] = ModeFor(mode, judge),
-            ["effect"] = new FixedPolicy(Verdict.Ask),
-            ["allow-all"] = new FixedPolicy(Verdict.Allow),
-        });
-        Approvals = new Approvals(new ProjectBoundaryPolicy(Project.Location, Policy), Ui);
-        Agent = new Agent(model, Tools, new ToolRunner(Tools, Approvals, Ui), Settings.Iterations, Ui);
+        _app = new App(settings ?? DefaultSettings, Ui, Project.Location, model, judge ?? new ScriptedModel());
+        _app.Policy.TrySetMode(mode);
     }
 
     public static Settings DefaultSettings { get; } = new(
@@ -36,20 +22,11 @@ public sealed class TestApp : IDisposable
 
     public TempProject Project { get; }
     public FakeUserInterface Ui { get; }
-    public Settings Settings { get; }
-    public ToolRegistry Tools { get; }
-    public SwitchablePolicy Policy { get; }
-    public Approvals Approvals { get; }
-    public Agent Agent { get; }
-
-    public Repl NewRepl() => new(Agent, Policy, Tools, Ui);
+    public ToolRegistry Tools => _app.Tools;
+    public SwitchablePolicy Policy => _app.Policy;
+    public ToolRunner Runner => _app.Runner;
+    public Agent Agent => _app.Agent;
+    public Repl Repl => _app.Repl;
 
     public void Dispose() => Project.Dispose();
-
-    private static IPolicy ModeFor(string mode, ILanguageModel? judge) => mode switch
-    {
-        "judge" => new JudgePolicy(judge ?? throw new ArgumentException("A judge model is required.")),
-        "effect" => new FixedPolicy(Verdict.Ask),
-        _ => new FixedPolicy(Verdict.Allow),
-    };
 }

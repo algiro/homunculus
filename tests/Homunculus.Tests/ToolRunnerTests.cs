@@ -6,18 +6,13 @@ namespace Homunculus.Tests;
 public class ToolRunnerTests
 {
     private TestApp _app = null!;
-    private ToolRunner _runner = null!;
 
-    private void Start(string mode = "allow-all")
-    {
-        _app = new TestApp(new ScriptedModel(), mode);
-        _runner = new ToolRunner(_app.Tools, _app.Approvals, _app.Ui);
-    }
+    private void Start(string mode = "allow-all") => _app = new TestApp(new ScriptedModel(), mode);
 
     [TearDown] public void TearDown() => _app.Dispose();
 
     private Task<string> Run(string tool, string json) =>
-        _runner.RunAsync(new ToolCall("c1", tool, Json.Parse(json)), CancellationToken.None);
+        _app.Runner.RunAsync(new ToolCall("c1", tool, Json.Parse(json)), CancellationToken.None);
 
     [Test]
     public async Task ReturnsTheToolOutput()

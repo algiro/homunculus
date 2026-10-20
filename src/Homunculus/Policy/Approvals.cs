@@ -17,7 +17,7 @@ public sealed class Approvals(IPolicy policy, IUserInterface ui)
         return await policy.EvaluateAsync(tool, arguments, cancellation) switch
         {
             Verdict.Allow => null,
-            Verdict.Deny => "Denied by the policy judge.",
+            Verdict.Deny => "Denied by the policy.",
             _ => AskUser(tool, arguments),
         };
     }

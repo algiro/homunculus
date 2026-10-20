@@ -13,7 +13,7 @@ public class ReplTests
     {
         _app = new TestApp(model, "effect");
         _app.Ui.TypesLines(lines);
-        await _app.NewRepl().RunAsync();
+        await _app.Repl.RunAsync();
     }
 
     [Test]

@@ -4,6 +4,7 @@ public sealed class FakeUserInterface : IUserInterface
 {
     private readonly Queue<string> _lines = new();
     private readonly Queue<char> _choices = new();
+    private Action? _onCancel;
 
     public List<string> Output { get; } = [];
     public List<string> Questions { get; } = [];
@@ -31,4 +32,13 @@ public sealed class FakeUserInterface : IUserInterface
     }
 
     public string? ReadLine() => _lines.Count > 0 ? _lines.Dequeue() : null;
+
+    public IDisposable ListenForCancel(Action onCancel)
+    {
+        _onCancel = onCancel;
+        return new Subscription(() => _onCancel = null);
+    }
+
+    /// <summary>Simulates the user pressing ctrl-c while a turn is running.</summary>
+    public void PressCancel() => _onCancel?.Invoke();
 }

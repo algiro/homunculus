@@ -9,4 +9,7 @@ public interface IUserInterface
 
     /// <summary>Reads a line of input, or null when the input has ended.</summary>
     string? ReadLine();
+
+    /// <summary>Calls <paramref name="onCancel"/> whenever the user asks to stop; dispose to stop listening.</summary>
+    IDisposable ListenForCancel(Action onCancel);
 }

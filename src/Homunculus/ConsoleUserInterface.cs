@@ -20,4 +20,15 @@ public sealed class ConsoleUserInterface : IUserInterface
         Console.Write("> ");
         return Console.ReadLine();
     }
+
+    public IDisposable ListenForCancel(Action onCancel)
+    {
+        ConsoleCancelEventHandler handler = (_, e) =>
+        {
+            e.Cancel = true;
+            onCancel();
+        };
+        Console.CancelKeyPress += handler;
+        return new Subscription(() => Console.CancelKeyPress -= handler);
+    }
 }
