@@ -1,0 +1,23 @@
+namespace Homunculus;
+
+public sealed class ConsoleUserInterface : IUserInterface
+{
+    public void Show(string text) => Console.WriteLine(text);
+
+    public char Choose(string question, string options)
+    {
+        while (true)
+        {
+            Console.Write($"{question} [{string.Join('/', options)}] ");
+            var answer = Console.ReadLine()?.Trim().ToLowerInvariant();
+            if (answer is null) return 'n';
+            if (answer.Length == 1 && options.Contains(answer[0])) return answer[0];
+        }
+    }
+
+    public string? ReadLine()
+    {
+        Console.Write("> ");
+        return Console.ReadLine();
+    }
+}

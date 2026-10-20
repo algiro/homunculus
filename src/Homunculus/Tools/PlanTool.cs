@@ -1,0 +1,30 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace Homunculus.Tools;
+
+public sealed class PlanTool : ITool
+{
+    public const string ToolName = "plan";
+
+    public string Name => ToolName;
+    public string Description => $"Record the steps of the work ahead (at most {Limits.PlanSteps} steps of {Limits.PlanStepChars} characters).";
+    public JsonObject Parameters => Schema.StringList("steps", "Ordered list of steps.");
+    public ToolAccess Access => ToolAccess.Plan;
+
+    public string? TargetPath(JsonElement arguments) => null;
+
+    public Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation)
+    {
+        if (!arguments.TryGetProperty("steps", out var list) || list.ValueKind != JsonValueKind.Array)
+            throw new ToolException("Missing argument 'steps'.");
+
+        var steps = list.EnumerateArray().Select(step => step.GetString() ?? "").ToList();
+        if (steps.Count > Limits.PlanSteps)
+            throw new ToolException($"A plan has at most {Limits.PlanSteps} steps.");
+        if (steps.Any(step => step.Length > Limits.PlanStepChars))
+            throw new ToolException($"A step has at most {Limits.PlanStepChars} characters.");
+
+        return Task.FromResult(string.Join('\n', steps.Select((step, i) => $"{i + 1}. {step}")));
+    }
+}
