@@ -40,8 +40,11 @@ public class PlanToolTests
     [Test]
     public void FailsWhenStepsIsNotAList() => Assert.ThrowsAsync<ToolException>(() => Run("""{"steps":"read"}"""));
 
-    [Test, Ignore("Known bug: a non-string step throws InvalidOperationException instead of ToolException.")]
+    [Test]
     public void FailsCleanlyWhenAStepIsNotText() => Assert.ThrowsAsync<ToolException>(() => Run("""{"steps":[1,2]}"""));
+
+    [Test]
+    public void FailsWhenTheArgumentsAreNotAnObject() => Assert.ThrowsAsync<ToolException>(() => Run("[]"));
 
     [Test]
     public void IsAPlanWithoutAFileTarget()

@@ -39,7 +39,21 @@ public sealed class OpenAiModel : ILanguageModel
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Model call failed ({(int)response.StatusCode}): {body}");
 
-        return FromJson(JsonNode.Parse(body)!["choices"]![0]!["message"]!);
+        return ParseReply(body);
+    }
+
+    private static Message ParseReply(string body)
+    {
+        try
+        {
+            var message = JsonNode.Parse(body)?["choices"]?.AsArray().FirstOrDefault()?["message"]
+                ?? throw new FormatException("no choices[0].message");
+            return FromJson(message);
+        }
+        catch (Exception e) when (e is JsonException or FormatException or InvalidOperationException)
+        {
+            throw new HttpRequestException($"Unexpected model response ({e.Message}): {body}");
+        }
     }
 
     private static JsonNode ToJson(Message message)
@@ -86,9 +100,12 @@ public sealed class OpenAiModel : ILanguageModel
 
     private static ToolCall ToolCallFromJson(JsonNode? json)
     {
-        var function = json!["function"]!;
+        var function = json?["function"] ?? throw new FormatException("tool call without function");
         var arguments = function["arguments"]?.GetValue<string>();
         using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(arguments) ? "{}" : arguments);
-        return new ToolCall(json["id"]!.GetValue<string>(), function["name"]!.GetValue<string>(), document.RootElement.Clone());
+        return new ToolCall(
+            json["id"]?.GetValue<string>() ?? throw new FormatException("tool call without id"),
+            function["name"]?.GetValue<string>() ?? throw new FormatException("tool call without name"),
+            document.RootElement.Clone());
     }
 }

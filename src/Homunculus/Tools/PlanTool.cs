@@ -16,10 +16,14 @@ public sealed class PlanTool : ITool
 
     public Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation)
     {
-        if (!arguments.TryGetProperty("steps", out var list) || list.ValueKind != JsonValueKind.Array)
+        if (arguments.ValueKind != JsonValueKind.Object
+            || !arguments.TryGetProperty("steps", out var list)
+            || list.ValueKind != JsonValueKind.Array)
             throw new ToolException("Missing argument 'steps'.");
 
-        var steps = list.EnumerateArray().Select(step => step.GetString() ?? "").ToList();
+        var steps = list.EnumerateArray()
+            .Select(step => step.ValueKind == JsonValueKind.String ? step.GetString()! : throw new ToolException("Every step must be text."))
+            .ToList();
         if (steps.Count > Limits.PlanSteps)
             throw new ToolException($"A plan has at most {Limits.PlanSteps} steps.");
         if (steps.Any(step => step.Length > Limits.PlanStepChars))

@@ -164,10 +164,14 @@ public class OpenAiModelTests
         Assert.That(error!.Message, Does.Contain("400").And.Contain("does not support tools"));
     }
 
-    [Test, Ignore("Known bug: a malformed or empty 'choices' response escapes as JsonException/NullReferenceException.")]
-    public void ReportsAMalformedResponseAsAnHttpError()
+    [TestCase("""{"choices":[]}""")]
+    [TestCase("""{}""")]
+    [TestCase("not json")]
+    [TestCase("""{"choices":[{"message":{"content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"x","arguments":"{broken"}}]}}]}""")]
+    [TestCase("""{"choices":[{"message":{"content":null,"tool_calls":[{"type":"function","function":{"name":"x","arguments":"{}"}}]}}]}""")]
+    public void ReportsAMalformedResponseAsAnHttpError(string response)
     {
-        var (model, _) = Create("""{"choices":[]}""");
+        var (model, _) = Create(response);
 
         Assert.ThrowsAsync<HttpRequestException>(() => Complete(model, [Message.User("hello")]));
     }

@@ -45,5 +45,9 @@ public class ReadFileToolTests
         Assert.ThrowsAsync<ToolException>(() => _tool.RunAsync(Json.Parse("{}"), CancellationToken.None));
 
     [Test]
+    public void FailsWhenTheArgumentsAreNotAnObject() =>
+        Assert.ThrowsAsync<ToolException>(() => _tool.RunAsync(Json.Parse("[]"), CancellationToken.None));
+
+    [Test]
     public void IsAReadOperation() => Assert.That(_tool.Access, Is.EqualTo(ToolAccess.Read));
 }

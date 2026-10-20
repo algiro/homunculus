@@ -19,7 +19,9 @@ public static class ToolArguments
         arguments.OptionalText(name) ?? throw new ToolException($"Missing argument '{name}'.");
 
     public static string? OptionalText(this JsonElement arguments, string name) =>
-        arguments.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+        arguments.ValueKind == JsonValueKind.Object
+        && arguments.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
 }
