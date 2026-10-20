@@ -17,8 +17,9 @@ catch (InvalidOperationException e)
 var ui = new ConsoleUserInterface();
 var project = new ProjectDirectory(Directory.GetCurrentDirectory());
 
-ILanguageModel ModelNamed(string name) =>
-    new OpenAiModel(new HttpClient(), settings.BaseUrl, settings.ApiKey, name);
+var http = OpenAiModel.CreateClient(settings.BaseUrl, settings.ApiKey);
+
+ILanguageModel ModelNamed(string name) => new OpenAiModel(http, name);
 
 var tools = new ToolRegistry(
 [

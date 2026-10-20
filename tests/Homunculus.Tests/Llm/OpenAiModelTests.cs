@@ -14,7 +14,7 @@ public class OpenAiModelTests
     private static (OpenAiModel Model, StubHttpHandler Handler) Create(string response, HttpStatusCode status = HttpStatusCode.OK)
     {
         var handler = new StubHttpHandler(status, response);
-        return (new OpenAiModel(new HttpClient(handler), "http://host/v1/", "secret", "my-model"), handler);
+        return (new OpenAiModel(OpenAiModel.CreateClient("http://host/v1/", "secret", handler), "my-model"), handler);
     }
 
     private static Task<Message> Complete(OpenAiModel model, Message[] conversation, params ToolSpec[] tools) =>
