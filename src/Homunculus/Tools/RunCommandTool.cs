@@ -9,7 +9,7 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout) :
 {
     public string Name => "run_command";
     public string Description => "Run a shell command line in the project directory and return its output and exit code.";
-    public JsonObject Parameters => Schema.Strings(1, ("command", "The command line to run."));
+    public JsonObject Parameters => Schema.Object(Parameter.Required("command", "The command line to run."));
 
     public ToolEffect EffectOf(JsonElement arguments) => ToolEffect.Running;
 
@@ -36,7 +36,7 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout) :
             throw new ToolException($"Command timed out after {timeout.TotalSeconds:0} seconds.");
         }
 
-        return Text.Truncate($"{output}\n[exit code {process.ExitCode}]", Limits.OutputChars);
+        return $"{output}\n[exit code {process.ExitCode}]".Truncate(Limits.OutputChars);
     }
 
     private Process Start(string command)

@@ -9,7 +9,7 @@ public sealed class PlanTool : ITool
 
     public string Name => ToolName;
     public string Description => $"Record the steps of the work ahead (at most {Limits.PlanSteps} steps of {Limits.PlanStepChars} characters).";
-    public JsonObject Parameters => Schema.StringList("steps", "Ordered list of steps.");
+    public JsonObject Parameters => Schema.ListOfText("steps", "Ordered list of steps.");
 
     public ToolEffect EffectOf(JsonElement arguments) => ToolEffect.Planning;
 

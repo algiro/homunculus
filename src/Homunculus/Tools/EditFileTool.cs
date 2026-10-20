@@ -9,10 +9,10 @@ public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
     public override string Description =>
         "Replace the single exact occurrence of old_str with new_str in a file. " +
         "With an empty old_str, create a new file containing new_str.";
-    public override JsonObject Parameters => Schema.Strings(3,
-        ("path", "File to edit or create."),
-        ("old_str", "Exact text to replace; must match exactly once. Empty to create a file."),
-        ("new_str", "Replacement text."));
+    public override JsonObject Parameters => Schema.Object(
+        Parameter.Required("path", "File to edit or create."),
+        Parameter.Required("old_str", "Exact text to replace; must match exactly once. Empty to create a file."),
+        Parameter.Required("new_str", "Replacement text."));
     protected override ToolAccess Access => ToolAccess.Write;
 
     protected override string Run(JsonElement arguments, string path)

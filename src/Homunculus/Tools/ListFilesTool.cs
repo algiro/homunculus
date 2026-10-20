@@ -7,7 +7,7 @@ public sealed class ListFilesTool(ProjectDirectory project) : FileTool(project)
 {
     public override string Name => "list_files";
     public override string Description => $"List the entries of a directory (at most {Limits.ListEntries}). Directories end with '/'.";
-    public override JsonObject Parameters => Schema.Strings(0, ("path", "Directory to list; defaults to the project root."));
+    public override JsonObject Parameters => Schema.Object(Parameter.Optional("path", "Directory to list; defaults to the project root."));
     protected override ToolAccess Access => ToolAccess.Read;
 
     protected override string PathOf(JsonElement arguments) =>
