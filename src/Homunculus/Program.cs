@@ -39,6 +39,6 @@ var modes = new SwitchablePolicy(new Dictionary<string, IPolicy>
 });
 var approvals = new Approvals(new ProjectBoundaryPolicy(project, modes), ui);
 
-var agent = new Agent(ModelNamed(settings.Model), tools, approvals, ui, settings);
+var agent = new Agent(ModelNamed(settings.Model), tools, new ToolRunner(tools, approvals, ui), settings.Iterations, ui);
 await new Repl(agent, modes, tools, ui).RunAsync();
 return 0;

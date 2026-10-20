@@ -173,7 +173,7 @@ public class AgentTests
     public async Task HonoursTheConfiguredIterationLimit()
     {
         var model = ScriptedModel.Repeating(Reply.Tool("list_files"));
-        Start(model, settings: TestApp.DefaultSettings with { MaxIterations = 2 });
+        Start(model, settings: TestApp.DefaultSettings with { Iterations = new IterationLimits(2, 24) });
 
         await Ask();
 

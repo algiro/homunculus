@@ -18,8 +18,8 @@ public class SettingsTests
         Assert.That(settings.Model, Is.EqualTo("gpt-5-mini"));
         Assert.That(settings.JudgeModel, Is.EqualTo("gpt-5-mini"));
         Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(600)));
-        Assert.That(settings.MaxIterations, Is.EqualTo(8));
-        Assert.That(settings.MaxIterationsWhenPlanning, Is.EqualTo(24));
+        Assert.That(settings.Iterations.Normal, Is.EqualTo(8));
+        Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(24));
     }
 
     [Test]
@@ -54,14 +54,14 @@ public class SettingsTests
             ("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", "5"),
             ("HOMUNCULUS_COMMAND_TIMEOUT_SECONDS", "7"));
 
-        Assert.That(settings.MaxIterations, Is.EqualTo(3));
-        Assert.That(settings.MaxIterationsWhenPlanning, Is.EqualTo(5));
+        Assert.That(settings.Iterations.Normal, Is.EqualTo(3));
+        Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(5));
         Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(7)));
     }
 
     [Test]
     public void FallsBackToTheDefaultForANonNumericValue() =>
-        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", "many")).MaxIterations, Is.EqualTo(8));
+        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", "many")).Iterations.Normal, Is.EqualTo(8));
 
     [Test]
     public void TreatsEmptyValuesAsUnset() =>

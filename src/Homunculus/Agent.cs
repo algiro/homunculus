@@ -1,5 +1,4 @@
 using Homunculus.Llm;
-using Homunculus.Policy;
 using Homunculus.Tools;
 
 namespace Homunculus;
@@ -8,9 +7,9 @@ namespace Homunculus;
 public sealed class Agent(
     ILanguageModel model,
     ToolRegistry tools,
-    Approvals approvals,
-    IUserInterface ui,
-    Settings settings)
+    ToolRunner runner,
+    IterationLimits limits,
+    IUserInterface ui)
 {
     private const string SystemPrompt =
         "You are a coding agent working in the user's project directory. Use the tools to inspect and change files " +
@@ -31,7 +30,7 @@ public sealed class Agent(
         var specs = tools.Specs();
         var planned = false;
 
-        for (var iteration = 0; iteration < Ceiling(planned); iteration++)
+        for (var iteration = 0; iteration < limits.For(planned); iteration++)
         {
             var reply = await model.CompleteAsync(_conversation, specs, cancellation);
             _conversation.Add(reply);
@@ -45,30 +44,10 @@ public sealed class Agent(
             foreach (var call in reply.ToolCalls!)
             {
                 planned |= call.Name == PlanTool.ToolName;
-                _conversation.Add(Message.ToolResult(call.Id, await RunToolAsync(call, cancellation)));
+                _conversation.Add(Message.ToolResult(call.Id, await runner.RunAsync(call, cancellation)));
             }
         }
 
         ui.Show("Stopped: iteration limit reached for this message.");
-    }
-
-    private int Ceiling(bool planned) => planned ? settings.MaxIterationsWhenPlanning : settings.MaxIterations;
-
-    private async Task<string> RunToolAsync(ToolCall call, CancellationToken cancellation)
-    {
-        var tool = tools.Find(call.Name);
-        if (tool is null)
-            return $"Error: unknown tool '{call.Name}'.";
-
-        ui.Show($"  -> {call.Name} {call.Arguments.GetRawText()}");
-        try
-        {
-            var refusal = await approvals.CheckAsync(tool, call.Arguments, cancellation);
-            return refusal ?? await tool.RunAsync(call.Arguments, cancellation);
-        }
-        catch (Exception e) when (e is ToolException or IOException or UnauthorizedAccessException)
-        {
-            return $"Error: {e.Message}";
-        }
     }
 }

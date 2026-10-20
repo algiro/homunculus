@@ -28,11 +28,11 @@ public sealed class TestApp : IDisposable
             ["allow-all"] = new FixedPolicy(Verdict.Allow),
         });
         Approvals = new Approvals(new ProjectBoundaryPolicy(Project.Location, Policy), Ui);
-        Agent = new Agent(model, Tools, Approvals, Ui, Settings);
+        Agent = new Agent(model, Tools, new ToolRunner(Tools, Approvals, Ui), Settings.Iterations, Ui);
     }
 
     public static Settings DefaultSettings { get; } = new(
-        "key", "http://localhost", "model", "judge", TimeSpan.FromSeconds(30), 8, 24);
+        "key", "http://localhost", "model", "judge", TimeSpan.FromSeconds(30), new IterationLimits(8, 24));
 
     public TempProject Project { get; }
     public FakeUserInterface Ui { get; }

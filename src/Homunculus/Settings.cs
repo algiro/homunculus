@@ -6,8 +6,7 @@ public sealed record Settings(
     string Model,
     string JudgeModel,
     TimeSpan CommandTimeout,
-    int MaxIterations,
-    int MaxIterationsWhenPlanning)
+    IterationLimits Iterations)
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
 
@@ -29,7 +28,8 @@ public sealed record Settings(
             model,
             Env("HOMUNCULUS_JUDGE_MODEL") ?? model,
             TimeSpan.FromSeconds(Number("HOMUNCULUS_COMMAND_TIMEOUT_SECONDS", 600)),
-            Number("HOMUNCULUS_MAX_ITERATIONS", 8),
-            Number("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24));
+            new IterationLimits(
+                Number("HOMUNCULUS_MAX_ITERATIONS", 8),
+                Number("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24)));
     }
 }
