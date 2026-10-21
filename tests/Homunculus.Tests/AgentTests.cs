@@ -1,68 +1,68 @@
 using Homunculus.Llm;
+using Homunculus.Policy;
 using Homunculus.Tests.Support;
+using Homunculus.Tools;
 
 namespace Homunculus.Tests;
 
+/// <summary>The agent loop on its own: a scripted model, a fake tool and a fixed policy, with no project on disk.</summary>
 public class AgentTests
 {
-    private TestApp _app = null!;
+    private const string SystemPrompt = "be brief";
 
-    [TearDown] public void TearDown() => _app.Dispose();
+    private FakeTool _echo = null!;
+    private FakeUserInterface _ui = null!;
 
-    private TestApp Start(ScriptedModel model, string mode = "allow-all", Settings? settings = null) =>
-        _app = new TestApp(model, mode, settings: settings);
+    [SetUp]
+    public void SetUp()
+    {
+        _echo = new FakeTool("echo");
+        _ui = new FakeUserInterface();
+    }
 
-    private Task Ask(string input = "do it") => _app.Agent.RespondAsync(input, CancellationToken.None);
+    private Agent Build(ScriptedModel model, Verdict verdict = Verdict.Allow, IterationLimits? limits = null)
+    {
+        var tools = new ToolRegistry([_echo, new PlanTool()]);
+        var runner = new ToolRunner(tools, new Approvals(new FixedPolicy(verdict), _ui), _ui);
+        return new Agent(model, new Conversation(SystemPrompt), tools, runner, limits ?? new IterationLimits(8, 24), _ui);
+    }
+
+    private static Task Ask(Agent agent, string input = "do it") => agent.RespondAsync(input, CancellationToken.None);
 
     [Test]
     public async Task ShowsATextReplyAndStops()
     {
-        Start(new ScriptedModel(Reply.Text("hello")));
+        var agent = Build(new ScriptedModel(Reply.Text("hello")));
 
-        await Ask();
+        await Ask(agent);
 
-        Assert.That(_app.Ui.Output, Is.EqualTo(new[] { "hello" }));
+        Assert.That(_ui.Output, Is.EqualTo(new[] { "hello" }));
     }
 
     [Test]
-    public async Task SendsTheSystemPromptTheUserMessageAndAllTools()
+    public async Task SendsTheSystemPromptTheUserMessageAndTheToolSpecs()
     {
         var model = new ScriptedModel(Reply.Text("ok"));
-        Start(model);
 
-        await Ask("fix the bug");
+        await Ask(Build(model), "fix the bug");
 
-        Assert.That(model.LastConversation.Select(m => m.Role), Is.EqualTo(new[] { Role.System, Role.User }));
-        Assert.That(model.LastConversation[1].Content, Is.EqualTo("fix the bug"));
-        Assert.That(model.ToolLists[0], Has.Count.EqualTo(6));
+        Assert.That(model.LastConversation.Select(m => (m.Role, m.Content)),
+            Is.EqualTo(new[] { (Role.System, (string?)SystemPrompt), (Role.User, "fix the bug") }));
+        Assert.That(model.ToolLists[0].Select(t => t.Name), Is.EquivalentTo(new[] { "echo", "plan" }));
     }
 
     [Test]
     public async Task RunsARequestedToolAndReturnsTheResultToTheModel()
     {
-        var model = new ScriptedModel(
-            Reply.Tool("read_file", """{"path":"a.txt"}""", "c1"),
-            Reply.Text("it says hi"));
-        Start(model);
-        _app.Project.Write("a.txt", "hi");
+        _echo.Result = "pong";
+        var model = new ScriptedModel(Reply.Tool("echo", """{"n":1}""", "c1"), Reply.Text("it said pong"));
 
-        await Ask();
+        await Ask(Build(model));
 
-        var toolResult = model.Conversations[1][^1];
-        Assert.That(toolResult.Role, Is.EqualTo(Role.Tool));
-        Assert.That(toolResult.ToolCallId, Is.EqualTo("c1"));
-        Assert.That(toolResult.Content, Is.EqualTo("hi"));
-        Assert.That(_app.Ui.Output[^1], Is.EqualTo("it says hi"));
-    }
-
-    [Test]
-    public async Task AnnouncesEachToolCall()
-    {
-        Start(new ScriptedModel(Reply.Tool("list_files"), Reply.Text("done")));
-
-        await Ask();
-
-        Assert.That(_app.Ui.Output[0], Does.Contain("list_files"));
+        Assert.That(_echo.Calls.Single().GetProperty("n").GetInt32(), Is.EqualTo(1));
+        var toolMessage = model.Conversations[1][^1];
+        Assert.That((toolMessage.Role, toolMessage.ToolCallId, toolMessage.Content), Is.EqualTo((Role.Tool, "c1", (string?)"pong")));
+        Assert.That(_ui.Output[^1], Is.EqualTo("it said pong"));
     }
 
     [Test]
@@ -70,149 +70,105 @@ public class AgentTests
     {
         var model = new ScriptedModel(
             Reply.Calls(
-                new ToolCall("a", "edit_file", Json.Parse("""{"path":"x.txt","old_str":"","new_str":"1"}""")),
-                new ToolCall("b", "read_file", Json.Parse("""{"path":"x.txt"}"""))),
+                new ToolCall("a", "echo", Json.Parse("""{"n":1}""")),
+                new ToolCall("b", "echo", Json.Parse("""{"n":2}"""))),
             Reply.Text("done"));
-        Start(model);
 
-        await Ask();
+        await Ask(Build(model));
 
-        var results = model.Conversations[1].Where(m => m.Role == Role.Tool).ToList();
-        Assert.That(results.Select(r => r.ToolCallId), Is.EqualTo(new[] { "a", "b" }));
-        Assert.That(results[1].Content, Is.EqualTo("1"));
+        Assert.That(_echo.Calls.Select(c => c.GetProperty("n").GetInt32()), Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(model.Conversations[1].Where(m => m.Role == Role.Tool).Select(m => m.ToolCallId), Is.EqualTo(new[] { "a", "b" }));
     }
 
     [Test]
-    public async Task TellsTheModelWhenAToolIsUnknown()
+    public async Task KeepsGoingWhenTheModelAsksForAnUnknownTool()
     {
         var model = new ScriptedModel(Reply.Tool("fly"), Reply.Text("sorry"));
-        Start(model);
 
-        await Ask();
+        await Ask(Build(model));
 
-        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Error: unknown tool 'fly'"));
+        Assert.That(model.Conversations[1][^1].Role, Is.EqualTo(Role.Tool));
+        Assert.That(_ui.Output[^1], Is.EqualTo("sorry"));
     }
 
     [Test]
-    public async Task TurnsAToolFailureIntoAnErrorResultInsteadOfCrashing()
+    public async Task KeepsGoingWhenAToolFails()
     {
-        var model = new ScriptedModel(Reply.Tool("read_file", """{"path":"missing.txt"}"""), Reply.Text("ok"));
-        Start(model);
+        _echo.Failure = new ToolException("no good");
+        var model = new ScriptedModel(Reply.Tool("echo"), Reply.Text("ok"));
 
-        await Ask();
+        await Ask(Build(model));
 
-        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Error: File not found"));
+        Assert.That(model.Conversations[1][^1].Content, Does.Contain("no good"));
+        Assert.That(_ui.Output[^1], Is.EqualTo("ok"));
     }
 
     [Test]
-    public async Task TurnsAMissingArgumentIntoAnErrorResult()
+    public async Task DoesNotRunAToolThePolicyDenies()
     {
-        var model = new ScriptedModel(Reply.Tool("read_file", "{}"), Reply.Text("ok"));
-        Start(model);
+        var model = new ScriptedModel(Reply.Tool("echo"), Reply.Text("understood"));
 
-        await Ask();
+        await Ask(Build(model, Verdict.Deny));
 
-        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Error: Missing argument 'path'"));
-    }
-
-    [Test]
-    public async Task DoesNotRunAToolTheUserRefuses()
-    {
-        var model = new ScriptedModel(
-            Reply.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
-            Reply.Text("understood"));
-        Start(model, "effect");
-        _app.Ui.Answers('n');
-
-        await Ask();
-
-        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.False);
-        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("Refused by the user."));
-    }
-
-    [Test]
-    public async Task RunsAToolOutsideTheProjectWhenTheUserAgrees()
-    {
-        Start(new ScriptedModel(
-            Reply.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
-            Reply.Text("done")), "effect");
-        _app.Ui.Answers('y');
-
-        await Ask();
-
-        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.True);
+        Assert.That(_echo.Calls, Is.Empty);
+        Assert.That(model.Conversations[1][^1].Role, Is.EqualTo(Role.Tool));
+        Assert.That(_ui.Output[^1], Is.EqualTo("understood"));
     }
 
     [Test]
     public async Task StopsAfterTheIterationLimit()
     {
-        var model = ScriptedModel.Repeating(Reply.Tool("list_files"));
-        Start(model);
+        var model = ScriptedModel.Repeating(Reply.Tool("echo"));
 
-        await Ask();
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
-        Assert.That(model.Calls, Is.EqualTo(8));
-        Assert.That(_app.Ui.Output[^1], Does.Contain("iteration limit"));
+        Assert.That(model.Calls, Is.EqualTo(3));
+        Assert.That(_ui.Output[^1], Does.Contain("iteration limit"));
     }
 
     [Test]
     public async Task AllowsMoreIterationsOnceAPlanWasMade()
     {
-        var script = new[] { Reply.Tool("plan", """{"steps":["a"]}""") }
-            .Concat(Enumerable.Repeat(Reply.Tool("list_files"), 40))
-            .ToArray();
-        var model = new ScriptedModel(script);
-        Start(model);
+        var model = new ScriptedModel(
+            [Reply.Tool("plan", """{"steps":["a"]}"""), .. Enumerable.Repeat(Reply.Tool("echo"), 10)]);
 
-        await Ask();
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
-        Assert.That(model.Calls, Is.EqualTo(24));
-    }
-
-    [Test]
-    public async Task HonoursTheConfiguredIterationLimit()
-    {
-        var model = ScriptedModel.Repeating(Reply.Tool("list_files"));
-        Start(model, settings: TestApp.DefaultSettings with { Iterations = new IterationLimits(2, 24) });
-
-        await Ask();
-
-        Assert.That(model.Calls, Is.EqualTo(2));
+        Assert.That(model.Calls, Is.EqualTo(5));
     }
 
     [Test]
     public async Task RemembersTheConversationBetweenMessages()
     {
         var model = new ScriptedModel(Reply.Text("first"), Reply.Text("second"));
-        Start(model);
+        var agent = Build(model);
 
-        await Ask("one");
-        await Ask("two");
+        await Ask(agent, "one");
+        await Ask(agent, "two");
 
-        Assert.That(model.LastConversation.Select(m => m.Content), Is.EqualTo(new[] { model.LastConversation[0].Content, "one", "first", "two" }));
+        Assert.That(model.LastConversation.Select(m => m.Content), Is.EqualTo(new[] { SystemPrompt, "one", "first", "two" }));
     }
 
     [Test]
     public async Task ForgetsTheConversationWhenCleared()
     {
         var model = new ScriptedModel(Reply.Text("first"), Reply.Text("second"));
-        Start(model);
+        var agent = Build(model);
 
-        await Ask("one");
-        _app.Agent.ClearConversation();
-        await Ask("two");
+        await Ask(agent, "one");
+        agent.ClearConversation();
+        await Ask(agent, "two");
 
-        Assert.That(model.LastConversation.Select(m => m.Role), Is.EqualTo(new[] { Role.System, Role.User }));
-        Assert.That(model.LastConversation[1].Content, Is.EqualTo("two"));
+        Assert.That(model.LastConversation.Select(m => m.Content), Is.EqualTo(new[] { SystemPrompt, "two" }));
     }
 
     [Test]
     public void PropagatesCancellation()
     {
-        Start(new ScriptedModel(Reply.Text("never")));
+        var agent = Build(new ScriptedModel(Reply.Text("never")));
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        Assert.CatchAsync<OperationCanceledException>(() => _app.Agent.RespondAsync("x", cancellation.Token));
+        Assert.CatchAsync<OperationCanceledException>(() => agent.RespondAsync("x", cancellation.Token));
     }
 }

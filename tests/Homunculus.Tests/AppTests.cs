@@ -69,6 +69,34 @@ public class AppTests
     }
 
     [Test]
+    public async Task DoesNotWriteOutsideTheProjectWhenTheUserRefuses()
+    {
+        var model = new ScriptedModel(
+            Reply.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
+            Reply.Text("understood"));
+        _app = new TestApp(model, "effect");
+        _app.Ui.Answers('n');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.False);
+    }
+
+    [Test]
+    public async Task WritesOutsideTheProjectWhenTheUserAgrees()
+    {
+        var model = new ScriptedModel(
+            Reply.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
+            Reply.Text("done"));
+        _app = new TestApp(model, "effect");
+        _app.Ui.Answers('y');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.True);
+    }
+
+    [Test]
     public async Task TheUserCanStopATurnThatIsWaitingForTheModel()
     {
         var model = new BlockingModel();
