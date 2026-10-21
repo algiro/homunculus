@@ -56,4 +56,18 @@ public class ToolRegistryTests
 
         Assert.That(plan.Parameters["properties"]!["steps"]!["type"]!.GetValue<string>(), Is.EqualTo("array"));
     }
+
+    [Test]
+    public void LoadsOnlyTheEnabledToolsPlusPlan()
+    {
+        using var app = new TestApp(new ScriptedModel(), settings: TestApp.DefaultSettings with { EnabledTools = ["read_file"] });
+
+        Assert.That(app.Tools.All.Select(t => t.Name), Is.EquivalentTo(new[] { "read_file", "plan" }));
+    }
+
+    [Test]
+    public void RefusesAnUnknownToolAtStartup() =>
+        Assert.Throws<InvalidOperationException>(() =>
+            new TestApp(new ScriptedModel(), settings: TestApp.DefaultSettings with { EnabledTools = ["teleport"] }));
+
 }

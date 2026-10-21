@@ -66,4 +66,14 @@ public class SettingsTests
     [Test]
     public void TreatsEmptyValuesAsUnset() =>
         Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MODEL", "")).Model, Is.EqualTo("gpt-5-mini"));
+
+    [Test]
+    public void AllToolsAreEnabledUnlessListed() =>
+        Assert.That(From(("OPENAI_API_KEY", "k")).EnabledTools, Is.Null);
+
+    [Test]
+    public void ReadsTheEnabledToolsAsATrimmedList() =>
+        Assert.That(
+            From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_TOOLS", "read_file, list_files ,")).EnabledTools,
+            Is.EqualTo(new[] { "read_file", "list_files" }));
 }

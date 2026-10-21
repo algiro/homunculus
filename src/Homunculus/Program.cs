@@ -13,13 +13,22 @@ catch (InvalidOperationException e)
     return 1;
 }
 
-var http = OpenAiModel.CreateClient(settings.BaseUrl, settings.ApiKey);
-var app = new App(
-    settings,
-    new ConsoleUserInterface(),
-    new ProjectDirectory(Directory.GetCurrentDirectory()),
-    new OpenAiModel(http, settings.Model),
-    new OpenAiModel(http, settings.JudgeModel));
+App app;
+try
+{
+    var http = OpenAiModel.CreateClient(settings.BaseUrl, settings.ApiKey);
+    app = new App(
+        settings,
+        new ConsoleUserInterface(),
+        new ProjectDirectory(Directory.GetCurrentDirectory()),
+        new OpenAiModel(http, settings.Model),
+        new OpenAiModel(http, settings.JudgeModel));
+}
+catch (InvalidOperationException e)
+{
+    Console.Error.WriteLine(e.Message);
+    return 1;
+}
 
 await app.Repl.RunAsync();
 return 0;

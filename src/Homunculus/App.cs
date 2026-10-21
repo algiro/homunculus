@@ -23,7 +23,7 @@ public sealed class App
             new DeleteFileTool(project),
             new RunCommandTool(project, settings.CommandTimeout),
             new PlanTool(),
-        ]);
+        ], settings.EnabledTools);
 
         Policy = new SwitchablePolicy(new Dictionary<string, IPolicy>
         {

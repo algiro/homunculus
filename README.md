@@ -17,6 +17,7 @@ Set `OPENAI_API_KEY` (not needed when `HOMUNCULUS_BASE_URL` points to a local Op
 | `HOMUNCULUS_MAX_ITERATIONS` | 8 |
 | `HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING` | 24 |
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
+| `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
 
 Commands: `/help`, `/tools`, `/policy [judge|effect|allow-all]`, `/clear`, `/exit`. `ctrl-c` stops a turn.
 
@@ -27,6 +28,6 @@ Commands: `/help`, `/tools`, `/policy [judge|effect|allow-all]`, `/clear`, `/exi
 - `Agent`: send the conversation, run the requested tools, repeat until the model answers with text.
 - `ToolRunner`: runs one tool call if approved and turns failures into text the model can read.
 - `Llm/`: `ILanguageModel`; `OpenAiModel` (HTTP) and `OpenAiJson` (wire format) implement it for OpenAI-compatible servers.
-- `Tools/`: `ITool` and the six tools. A tool describes what a call does with `ToolEffect`. A new tool is one class and one line in `App`.
+- `Tools/`: `ITool` and the six tools. A tool describes what a call does with `ToolEffect`. A new tool is one class and one line in `App`. `HOMUNCULUS_TOOLS` limits which tools are loaded at startup; `plan` is always loaded.
 - `Policy/`: calls inside the project run freely (`ProjectBoundaryPolicy`); the rest goes to the selected mode (`SwitchablePolicy`): `judge` asks a second model, `effect` always asks you, `allow-all` never asks. `Approvals` asks you when the policy is unsure; answer `y`, `n`, or `a` (always for that tool).
 - `Commands/`: one small `ICommand` class per slash command. A new command is one class and one line in `App`.

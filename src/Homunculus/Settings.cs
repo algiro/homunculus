@@ -6,7 +6,8 @@ public sealed record Settings(
     string Model,
     string JudgeModel,
     TimeSpan CommandTimeout,
-    IterationLimits Iterations)
+    IterationLimits Iterations,
+    IReadOnlyList<string>? EnabledTools = null)
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
 
@@ -30,6 +31,7 @@ public sealed record Settings(
             TimeSpan.FromSeconds(Number("HOMUNCULUS_COMMAND_TIMEOUT_SECONDS", 600)),
             new IterationLimits(
                 Number("HOMUNCULUS_MAX_ITERATIONS", 8),
-                Number("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24)));
+                Number("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24)),
+            Env("HOMUNCULUS_TOOLS")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 }
