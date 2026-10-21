@@ -8,6 +8,11 @@ namespace Homunculus;
 /// <summary>The composition root: creates every part of the application and connects them.</summary>
 public sealed class App
 {
+    private const string CodingAgentPrompt =
+        "You are a coding agent working in the user's project directory. Use the tools to inspect and change files " +
+        "and to run commands. List a directory before reading files in it, read a file before editing it, " +
+        "and keep answers short.";
+
     public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge)
     {
         Tools = new ToolRegistry(
@@ -29,7 +34,7 @@ public sealed class App
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui);
 
         Runner = new ToolRunner(Tools, approvals, ui);
-        Agent = new Agent(model, Tools, Runner, settings.Iterations, ui);
+        Agent = new Agent(model, new Conversation(CodingAgentPrompt), Tools, Runner, settings.Iterations, ui);
 
         var commands = new CommandRegistry();
         commands
