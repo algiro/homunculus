@@ -13,11 +13,9 @@ public sealed class JudgePolicy(ILanguageModel judge) : IPolicy
 
     public async Task<Verdict> EvaluateAsync(ITool tool, JsonElement arguments, CancellationToken cancellation)
     {
-        var conversation = new[]
-        {
-            Message.System(Instructions),
-            Message.User($"Tool: {tool.Name}\nArguments: {arguments.GetRawText()}"),
-        };
+        var conversation = new Conversation(Instructions);
+        conversation.Add(Message.User($"Tool: {tool.Name}\nArguments: {arguments.GetRawText()}"));
+
         var answer = await judge.CompleteAsync(conversation, [], cancellation);
         return Parse(answer.Content);
     }

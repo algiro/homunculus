@@ -3,7 +3,7 @@ namespace Homunculus.Llm;
 public interface ILanguageModel
 {
     Task<Message> CompleteAsync(
-        IReadOnlyList<Message> conversation,
+        IConversation conversation,
         IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation);
 }

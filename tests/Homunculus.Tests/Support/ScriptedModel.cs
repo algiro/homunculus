@@ -25,12 +25,12 @@ public sealed class ScriptedModel : ILanguageModel
     public IReadOnlyList<Message> LastConversation => Conversations[^1];
 
     public Task<Message> CompleteAsync(
-        IReadOnlyList<Message> conversation,
+        IConversation conversation,
         IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        Conversations.Add(conversation.ToList());
+        Conversations.Add(conversation.Messages.ToList());
         ToolLists.Add(tools);
 
         if (_script.Count > 0) return Task.FromResult(_script.Dequeue());

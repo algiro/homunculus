@@ -8,7 +8,7 @@ public sealed class ClearCommand(Agent agent, IUserInterface ui) : ICommand
 
     public CommandResult Execute(string argument)
     {
-        agent.Clear();
+        agent.ClearConversation();
         ui.Show("Conversation cleared.");
         return CommandResult.Continue;
     }

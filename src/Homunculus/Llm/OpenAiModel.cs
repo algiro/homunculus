@@ -16,7 +16,7 @@ public sealed class OpenAiModel(HttpClient http, string model) : ILanguageModel
         };
 
     public async Task<Message> CompleteAsync(
-        IReadOnlyList<Message> conversation,
+        IConversation conversation,
         IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation)
     {

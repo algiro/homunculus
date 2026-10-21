@@ -16,13 +16,9 @@ public sealed class Agent(
         "and to run commands. List a directory before reading files in it, read a file before editing it, " +
         "and keep answers short.";
 
-    private readonly List<Message> _conversation = [Message.System(SystemPrompt)];
+    private readonly IConversation _conversation = new Conversation(SystemPrompt);
 
-    public void Clear()
-    {
-        _conversation.Clear();
-        _conversation.Add(Message.System(SystemPrompt));
-    }
+    public void ClearConversation() => _conversation.Clear();
 
     public async Task RespondAsync(string input, CancellationToken cancellation)
     {

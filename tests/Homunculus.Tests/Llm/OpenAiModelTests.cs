@@ -18,7 +18,7 @@ public class OpenAiModelTests
     }
 
     private static Task<Message> Complete(OpenAiModel model, Message[] conversation, params ToolSpec[] tools) =>
-        model.CompleteAsync(conversation, tools, CancellationToken.None);
+        model.CompleteAsync(new FixedConversation(conversation), tools, CancellationToken.None);
 
     private static JsonNode SentJson(StubHttpHandler handler) => JsonNode.Parse(handler.RequestBody)!;
 

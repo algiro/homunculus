@@ -143,7 +143,7 @@ public class ReplTests
     {
         private bool _failed;
 
-        public Task<Message> CompleteAsync(IReadOnlyList<Message> conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public Task<Message> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             if (_failed) return Task.FromResult(Reply.Text("recovered"));
             _failed = true;
@@ -155,7 +155,7 @@ public class ReplTests
     {
         private bool _cancelled;
 
-        public Task<Message> CompleteAsync(IReadOnlyList<Message> conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public Task<Message> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             if (_cancelled) return Task.FromResult(Reply.Text("recovered"));
             _cancelled = true;

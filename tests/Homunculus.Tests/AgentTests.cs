@@ -199,7 +199,7 @@ public class AgentTests
         Start(model);
 
         await Ask("one");
-        _app.Agent.Clear();
+        _app.Agent.ClearConversation();
         await Ask("two");
 
         Assert.That(model.LastConversation.Select(m => m.Role), Is.EqualTo(new[] { Role.System, Role.User }));

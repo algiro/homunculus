@@ -141,7 +141,7 @@ public class AppTests
 
         public Task Started => _started.Task;
 
-        public async Task<Message> CompleteAsync(IReadOnlyList<Message> conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public async Task<Message> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             _started.SetResult();
             await Task.Delay(Timeout.Infinite, cancellation);
