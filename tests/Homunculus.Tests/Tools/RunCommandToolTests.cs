@@ -12,7 +12,7 @@ public class RunCommandToolTests
 
     private RunCommandTool ToolWithTimeout(TimeSpan timeout) => new(_project.Location, timeout);
 
-    private Task<string> Run(RunCommandTool tool, string command, CancellationToken cancellation = default) =>
+    private static Task<string> Run(RunCommandTool tool, string command, CancellationToken cancellation = default) =>
         tool.RunAsync(Json.Parse(System.Text.Json.JsonSerializer.Serialize(new { command })), cancellation);
 
     private static string Sleep(int seconds) =>

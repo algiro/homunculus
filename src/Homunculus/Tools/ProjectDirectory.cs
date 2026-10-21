@@ -11,6 +11,6 @@ public sealed class ProjectDirectory(string root)
         var relative = Path.GetRelativePath(Root, fullPath);
         return !Path.IsPathRooted(relative)
             && relative != ".."
-            && !relative.StartsWith(".." + Path.DirectorySeparatorChar);
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 }

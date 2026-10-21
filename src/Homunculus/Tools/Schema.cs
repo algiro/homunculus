@@ -5,7 +5,7 @@ namespace Homunculus.Tools;
 /// <summary>Builds the JSON schema that tells the model which arguments a tool takes.</summary>
 public static class Schema
 {
-    public static JsonObject Object(params Parameter[] parameters) => new()
+    public static JsonObject Of(params Parameter[] parameters) => new()
     {
         ["type"] = "object",
         ["properties"] = new JsonObject(parameters.Select(p =>

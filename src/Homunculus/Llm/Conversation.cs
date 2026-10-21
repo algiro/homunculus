@@ -1,4 +1,4 @@
-﻿namespace Homunculus.Llm;
+namespace Homunculus.Llm;
 
 /// <summary>The messages exchanged so far, always starting with the system prompt.</summary>
 public interface IConversation

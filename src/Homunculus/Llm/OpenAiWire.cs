@@ -78,7 +78,7 @@ internal static class OpenAiWireMapping
             {
                 var message = JsonSerializer.Deserialize<OpenAiWire.ReplyDto>(body, options)?.Choices?.FirstOrDefault()?.Message
                     ?? throw new FormatException("no choices[0].message");
-                return new Message(Role.Assistant, message.Content, message.ToolCalls?.Select(c => c.FromWire()).ToList());
+                return Message.Assistant(message.Content, message.ToolCalls?.Select(c => c.FromWire()).ToList());
             }
             catch (JsonException e)
             {

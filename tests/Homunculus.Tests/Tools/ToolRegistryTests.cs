@@ -69,5 +69,4 @@ public class ToolRegistryTests
     public void RefusesAnUnknownToolAtStartup() =>
         Assert.Throws<InvalidOperationException>(() =>
             new TestApp(new ScriptedModel(), settings: TestApp.DefaultSettings with { EnabledTools = ["teleport"] }));
-
 }

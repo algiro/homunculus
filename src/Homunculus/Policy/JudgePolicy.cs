@@ -23,8 +23,8 @@ public sealed class JudgePolicy(ILanguageModel judge) : IPolicy
     private static Verdict Parse(string? answer)
     {
         var word = answer?.Trim().ToLowerInvariant() ?? "";
-        if (word.StartsWith("allow")) return Verdict.Allow;
-        if (word.StartsWith("deny")) return Verdict.Deny;
+        if (word.StartsWith("allow", StringComparison.Ordinal)) return Verdict.Allow;
+        if (word.StartsWith("deny", StringComparison.Ordinal)) return Verdict.Deny;
         return Verdict.Ask;
     }
 }

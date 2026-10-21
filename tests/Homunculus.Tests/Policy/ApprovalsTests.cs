@@ -7,7 +7,7 @@ namespace Homunculus.Tests.Policy;
 
 public class ApprovalsTests
 {
-    private static readonly ITool Tool = new PlanTool();
+    private static readonly PlanTool Tool = new();
     private static readonly ITool OtherTool = new ListFilesTool(new ProjectDirectory("."));
 
     private IPolicy _policy = null!;

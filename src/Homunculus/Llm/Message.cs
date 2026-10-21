@@ -19,5 +19,6 @@ public sealed record Message(
 
     public static Message System(string content) => new(Role.System, content);
     public static Message User(string content) => new(Role.User, content);
+    public static Message Assistant(string? content, IReadOnlyList<ToolCall>? toolCalls = null) => new(Role.Assistant, content, toolCalls);
     public static Message ToolResult(string callId, string content) => new(Role.Tool, content, ToolCallId: callId);
 }

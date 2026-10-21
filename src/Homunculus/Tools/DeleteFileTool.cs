@@ -7,7 +7,7 @@ public sealed class DeleteFileTool(ProjectDirectory project) : FileTool(project)
 {
     public override string Name => "delete_file";
     public override string Description => "Delete a file. Directories are refused.";
-    public override JsonObject Parameters => Schema.Object(Parameter.Required("path", "File to delete."));
+    public override JsonObject Parameters => Schema.Of(Parameter.Required("path", "File to delete."));
     protected override ToolAccess Access => ToolAccess.Write;
 
     protected override string Run(JsonElement arguments, string path)

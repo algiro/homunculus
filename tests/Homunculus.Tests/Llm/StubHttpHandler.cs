@@ -9,10 +9,10 @@ public sealed class StubHttpHandler(HttpStatusCode status, string responseBody) 
     public HttpRequestMessage? Request { get; private set; }
     public string RequestBody { get; private set; } = "";
 
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellation)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Request = request;
-        RequestBody = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellation);
+        RequestBody = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
         return new HttpResponseMessage(status) { Content = new StringContent(responseBody, Encoding.UTF8, "application/json") };
     }
 }
