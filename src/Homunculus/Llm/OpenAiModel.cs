@@ -22,12 +22,20 @@ public sealed class OpenAiModel(HttpClient http, string model) : ILanguageModel
     {
         var request = OpenAiJson.Request(model, conversation, tools);
 
-        using var content = new StringContent(request, Encoding.UTF8, "application/json");
-        using var response = await http.PostAsync("chat/completions", content, cancellation);
-        var body = await response.Content.ReadAsStringAsync(cancellation);
+        string body;
+        try
+        {
+            using var content = new StringContent(request, Encoding.UTF8, "application/json");
+            using var response = await http.PostAsync("chat/completions", content, cancellation);
+            body = await response.Content.ReadAsStringAsync(cancellation);
 
-        if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"Model call failed ({(int)response.StatusCode}): {body}");
+            if (!response.IsSuccessStatusCode)
+                throw new ModelException($"Model call failed ({(int)response.StatusCode}): {body}");
+        }
+        catch (HttpRequestException e)
+        {
+            throw new ModelException($"Could not reach the model: {e.Message}", e);
+        }
 
         try
         {
@@ -35,7 +43,7 @@ public sealed class OpenAiModel(HttpClient http, string model) : ILanguageModel
         }
         catch (FormatException e)
         {
-            throw new HttpRequestException($"Unexpected model response ({e.Message}): {body}");
+            throw new ModelException($"Unexpected model response ({e.Message}): {body}", e);
         }
     }
 }

@@ -1,5 +1,7 @@
 using Homunculus.Llm;
+using Homunculus.Policy;
 using Homunculus.Tests.Support;
+using Homunculus.Tools;
 
 namespace Homunculus.Tests;
 
@@ -68,5 +70,28 @@ public class ToolRunnerTests
         var result = await Run("run_command", """{"command":"echo hi"}""");
 
         Assert.That(result, Is.EqualTo("Refused by the user."));
+    }
+
+    [Test]
+    public void DoesNotHideUnexpectedToolFailures()
+    {
+        Start();
+        var runner = new ToolRunner(
+            new ToolRegistry([new BrokenTool()]),
+            new Approvals(new FixedPolicy(Verdict.Allow), _app.Ui),
+            _app.Ui);
+
+        Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runner.RunAsync(new ToolCall("c1", "broken", Json.Parse("{}")), CancellationToken.None));
+    }
+
+    private sealed class BrokenTool : ITool
+    {
+        public string Name => "broken";
+        public string Description => "Always fails with a bug.";
+        public System.Text.Json.Nodes.JsonObject Parameters => Schema.Of();
+        public ToolEffect EffectOf(System.Text.Json.JsonElement arguments) => ToolEffect.Planning;
+        public Task<string> RunAsync(System.Text.Json.JsonElement arguments, CancellationToken cancellation) =>
+            throw new InvalidOperationException("bug");
     }
 }

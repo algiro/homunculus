@@ -147,7 +147,7 @@ public class ReplTests
         {
             if (_failed) return Task.FromResult(Reply.Text("recovered"));
             _failed = true;
-            throw new HttpRequestException("boom");
+            throw new ModelException("boom");
         }
     }
 

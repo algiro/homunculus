@@ -1,4 +1,5 @@
 using Homunculus.Commands;
+using Homunculus.Llm;
 
 namespace Homunculus;
 
@@ -45,7 +46,7 @@ public sealed class Repl(Agent agent, CommandRegistry commands, IUserInterface u
         {
             ui.Show("Stopped.");
         }
-        catch (HttpRequestException e)
+        catch (ModelException e)
         {
             ui.Show($"Error: {e.Message}");
         }

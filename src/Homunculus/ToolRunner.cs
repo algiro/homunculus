@@ -4,7 +4,10 @@ using Homunculus.Tools;
 
 namespace Homunculus;
 
-/// <summary>Runs one tool call the model asked for, if approved, and turns any failure into text the model can read.</summary>
+/// <summary>
+/// Runs one tool call the model asked for, if approved. Failures the model can act on (a tool's own complaint, a missing file,
+/// a locked or forbidden path) become text it can read. Anything else is a bug in a tool, so it is not hidden and propagates.
+/// </summary>
 public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInterface ui)
 {
     public async Task<string> RunAsync(ToolCall call, CancellationToken cancellation)

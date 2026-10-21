@@ -16,3 +16,10 @@ public sealed class StubHttpHandler(HttpStatusCode status, string responseBody) 
         return new HttpResponseMessage(status) { Content = new StringContent(responseBody, Encoding.UTF8, "application/json") };
     }
 }
+
+/// <summary>A handler whose server cannot be reached.</summary>
+public sealed class UnreachableHttpHandler : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        throw new HttpRequestException("connection refused");
+}

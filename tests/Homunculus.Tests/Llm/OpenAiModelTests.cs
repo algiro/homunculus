@@ -159,9 +159,19 @@ public class OpenAiModelTests
     {
         var (model, _) = Create("""{"error":{"message":"does not support tools"}}""", HttpStatusCode.BadRequest);
 
-        var error = Assert.ThrowsAsync<HttpRequestException>(() => Complete(model, [Message.User("hello")]));
+        var error = Assert.ThrowsAsync<ModelException>(() => Complete(model, [Message.User("hello")]));
 
         Assert.That(error!.Message, Does.Contain("400").And.Contain("does not support tools"));
+    }
+
+    [Test]
+    public void ReportsAnUnreachableServerAsAModelError()
+    {
+        var model = new OpenAiModel(OpenAiModel.CreateClient("http://host/v1/", "secret", new UnreachableHttpHandler()), "my-model");
+
+        var error = Assert.ThrowsAsync<ModelException>(() => Complete(model, [Message.User("hello")]));
+
+        Assert.That(error!.InnerException, Is.InstanceOf<HttpRequestException>());
     }
 
     [TestCase("""{"choices":[]}""")]
@@ -169,10 +179,10 @@ public class OpenAiModelTests
     [TestCase("not json")]
     [TestCase("""{"choices":[{"message":{"content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"x","arguments":"{broken"}}]}}]}""")]
     [TestCase("""{"choices":[{"message":{"content":null,"tool_calls":[{"type":"function","function":{"name":"x","arguments":"{}"}}]}}]}""")]
-    public void ReportsAMalformedResponseAsAnHttpError(string response)
+    public void ReportsAMalformedResponseAsAModelError(string response)
     {
         var (model, _) = Create(response);
 
-        Assert.ThrowsAsync<HttpRequestException>(() => Complete(model, [Message.User("hello")]));
+        Assert.ThrowsAsync<ModelException>(() => Complete(model, [Message.User("hello")]));
     }
 }
