@@ -13,8 +13,23 @@ public static class OpenAiJson
     };
 
     public static string Request(string model, IConversation conversation, IReadOnlyList<ToolSpec> tools) =>
-        conversation.ToRequestJson(model, tools, Options);
+        JsonSerializer.Serialize(new OpenAiWire.RequestDto(
+            model,
+            conversation.Messages.Select(m => m.ToWire()).ToList(),
+            tools.Count > 0 ? tools.Select(t => t.ToWire()).ToList() : null), Options);
 
     /// <exception cref="FormatException">The body is not a chat-completions reply.</exception>
-    public static Message Reply(string body) => body.ToReplyMessage(Options);
+    public static Message Reply(string body)
+    {
+        try
+        {
+            var message = JsonSerializer.Deserialize<OpenAiWire.ReplyDto>(body, Options)?.Choices?.FirstOrDefault()?.Message
+                ?? throw new FormatException("no choices[0].message");
+            return Message.Assistant(message.Content, message.ToolCalls?.Select(c => c.FromWire()).ToList());
+        }
+        catch (JsonException e)
+        {
+            throw new FormatException(e.Message, e);
+        }
+    }
 }
