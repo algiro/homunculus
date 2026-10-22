@@ -25,6 +25,9 @@ public sealed class ScriptedModel : ILanguageModel
     /// <summary>The reasoning every reply carries; null means the model reports none.</summary>
     public string? Reasoning { get; set; }
 
+    /// <summary>How long every reply says it took; null means nothing measured it.</summary>
+    public TimeSpan? Elapsed { get; set; }
+
     public List<IReadOnlyList<Message>> Conversations { get; } = [];
     public List<IReadOnlyList<ToolSpec>> ToolLists { get; } = [];
     public int Calls => Conversations.Count;
@@ -40,6 +43,6 @@ public sealed class ScriptedModel : ILanguageModel
         ToolLists.Add(tools);
 
         var next = _script.Count > 0 ? _script.Dequeue() : _whenScriptEnds ?? throw new InvalidOperationException("The script has no more replies.");
-        return Task.FromResult(new Reply(next, Usage, Reasoning));
+        return Task.FromResult(new Reply(next, Usage, Reasoning, Elapsed));
     }
 }

@@ -5,18 +5,6 @@ namespace Homunculus.Tests.Llm;
 
 public class TimedModelTests
 {
-    /// <summary>A clock the test moves by hand, so no test ever sleeps.</summary>
-    private sealed class ManualClock : TimeProvider
-    {
-        private long _ticks;
-
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-
-        public override long GetTimestamp() => _ticks;
-
-        public void Advance(TimeSpan by) => _ticks += by.Ticks;
-    }
-
     /// <summary>A model that takes a given time (on the manual clock) and then answers or fails.</summary>
     private sealed class SlowModel(ManualClock clock, TimeSpan takes, Exception? fails = null) : ILanguageModel
     {
@@ -51,6 +39,17 @@ public class TimedModelTests
         var reply = await timed.CompleteAsync(Conversation, [], CancellationToken.None);
 
         Assert.That(reply.Message.Content, Is.EqualTo("hi"));
+    }
+
+    [Test]
+    public async Task PutsTheTimeOfEachCallOnItsReply()
+    {
+        var clock = new ManualClock();
+        var timed = new TimedModel(new SlowModel(clock, TimeSpan.FromSeconds(2)), new TimeLedger(), "agent", clock);
+        var first = await timed.CompleteAsync(Conversation, [], CancellationToken.None);
+        clock.Advance(TimeSpan.FromSeconds(100));
+
+        Assert.That(first.Elapsed, Is.EqualTo(TimeSpan.FromSeconds(2)));
     }
 
     [Test]

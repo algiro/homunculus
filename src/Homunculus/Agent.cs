@@ -48,6 +48,7 @@ public sealed class Agent(
 
             var reply = await model.CompleteAsync(conversation, specs, cancellation);
             if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
+            if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
 
             // What the model said, as parsed, whether or not it is shown: text that comes with tool calls is never displayed.
             _log.Write("reply", new
@@ -57,6 +58,7 @@ public sealed class Agent(
                 content = reply.Message.Content,
                 toolCalls = reply.Message.ToolCalls?.Select(c => c.Name).ToArray(),
                 usage = reply.Usage,
+                ms = reply.Elapsed?.TotalMilliseconds,
             });
 
             if (IsEmpty(reply.Message))

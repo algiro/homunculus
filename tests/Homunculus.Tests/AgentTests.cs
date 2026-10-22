@@ -193,6 +193,27 @@ public class AgentTests
     }
 
     [Test]
+    public async Task ShowsTheModelTimeAfterEveryIteration()
+    {
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Tool("echo"), Replies.Text("done"))
+        {
+            Elapsed = TimeSpan.FromSeconds(4.2),
+        };
+
+        await Ask(Build(model));
+
+        Assert.That(_ui.Output.Count(line => line.EndsWith("model took 4.2s", StringComparison.Ordinal)), Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ShowsNoTimeWhenNothingMeasuredIt()
+    {
+        await Ask(Build(new ScriptedModel(Replies.Text("done"))));
+
+        Assert.That(_ui.AllOutput, Does.Not.Contain("model took"));
+    }
+
+    [Test]
     public async Task AsksAtTheIterationLimitAndStopsWhenTheUserDeclines()
     {
         var model = ScriptedModel.Repeating(Replies.Tool("echo"));
