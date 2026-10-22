@@ -114,6 +114,32 @@ public class AppTests
     }
 
     [Test]
+    public async Task AsksBeforeReadingOutsideTheProjectEvenInAllowAllMode()
+    {
+        var model = new ScriptedModel(
+            Replies.Tool("list_files", """{"path":"/"}"""),
+            Replies.Text("understood"));
+        _app = new TestApp(model, "allow-all");
+        _app.Ui.Answers('n');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(_app.Ui.Questions.Single(), Does.Contain("OUTSIDE"));
+        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("Refused by the user."));
+    }
+
+    [Test]
+    public void TellsTheModelWhereTheProjectIs()
+    {
+        var model = new ScriptedModel(Replies.Text("hi"));
+        _app = new TestApp(model);
+
+        _app.Agent.RespondAsync("go", CancellationToken.None).GetAwaiter().GetResult();
+
+        Assert.That(model.LastConversation[0].Content, Does.Contain(_app.Project.Location.Root));
+    }
+
+    [Test]
     public async Task WritesOutsideTheProjectWhenTheUserAgrees()
     {
         var model = new ScriptedModel(

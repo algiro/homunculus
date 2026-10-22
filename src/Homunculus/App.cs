@@ -9,10 +9,11 @@ namespace Homunculus;
 /// <summary>The composition root: creates every part of the application and connects them.</summary>
 public sealed class App
 {
-    private const string CodingAgentPrompt =
-        "You are a coding agent working in the user's project directory. Use the tools to inspect and change files " +
-        "and to run commands. List a directory before reading files in it, read a file before editing it, " +
-        "and keep answers short.";
+    private static string CodingAgentPrompt(ProjectDirectory project) =>
+        $"You are a coding agent working in the project directory {project.Root}. Use paths relative to it " +
+        "(for example '.' is the project root); reaching anything outside it needs the user's approval each time. " +
+        "Use the tools to inspect and change files and to run commands. List a directory before reading files in it, " +
+        "read a file before editing it, and keep answers short.";
 
     public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
     {
@@ -32,10 +33,10 @@ public sealed class App
             ["effect"] = new FixedPolicy(Verdict.Ask),
             ["allow-all"] = new FixedPolicy(Verdict.Allow),
         });
-        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui);
+        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project);
 
         Runner = new ToolRunner(Tools, approvals, ui, log);
-        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
+        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
 
         var commands = new CommandRegistry();
         commands
