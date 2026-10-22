@@ -4,7 +4,7 @@ public interface ILanguageModel
 {
     /// <exception cref="ModelException">The model could not give a usable answer.</exception>
     /// <exception cref="OperationCanceledException">The call was cancelled.</exception>
-    Task<Message> CompleteAsync(
+    Task<Reply> CompleteAsync(
         IConversation conversation,
         IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation);

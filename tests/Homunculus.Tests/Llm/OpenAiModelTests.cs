@@ -17,8 +17,8 @@ public class OpenAiModelTests
         return (new OpenAiModel(OpenAiModel.CreateClient("http://host/v1/", "secret", handler), "my-model"), handler);
     }
 
-    private static Task<Message> Complete(OpenAiModel model, Message[] conversation, params ToolSpec[] tools) =>
-        model.CompleteAsync(new FixedConversation(conversation), tools, CancellationToken.None);
+    private static async Task<Message> Complete(OpenAiModel model, Message[] conversation, params ToolSpec[] tools) =>
+        (await model.CompleteAsync(new FixedConversation(conversation), tools, CancellationToken.None)).Message;
 
     private static JsonNode SentJson(StubHttpHandler handler) => JsonNode.Parse(handler.RequestBody)!;
 
@@ -86,7 +86,7 @@ public class OpenAiModelTests
         var (model, handler) = Create(TextReply);
         var call = new ToolCall("c1", "read_file", Json.Parse("""{"path":"a.txt"}"""));
 
-        await Complete(model, [Reply.Calls(call), Message.ToolResult("c1", "file text")]);
+        await Complete(model, [Replies.Calls(call), Message.ToolResult("c1", "file text")]);
 
         var messages = SentJson(handler)["messages"]!;
         var sentCall = messages[0]!["tool_calls"]![0]!;

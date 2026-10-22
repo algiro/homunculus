@@ -21,7 +21,7 @@ public class JudgePolicyTests
     [TestCase("I am not sure", Verdict.Ask)]
     [TestCase("", Verdict.Ask)]
     public async Task TurnsTheAnswerIntoAVerdict(string answer, Verdict expected) =>
-        Assert.That(await Judge(new ScriptedModel(Reply.Text(answer))), Is.EqualTo(expected));
+        Assert.That(await Judge(new ScriptedModel(Replies.Text(answer))), Is.EqualTo(expected));
 
     [Test]
     public async Task AsksWhenTheJudgeSaysNothing() =>
@@ -30,7 +30,7 @@ public class JudgePolicyTests
     [Test]
     public async Task ShowsTheJudgeTheToolCallWithoutOfferingTools()
     {
-        var model = new ScriptedModel(Reply.Text("ask"));
+        var model = new ScriptedModel(Replies.Text("ask"));
 
         await Judge(model);
 

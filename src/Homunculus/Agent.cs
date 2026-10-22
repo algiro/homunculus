@@ -23,15 +23,16 @@ public sealed class Agent(
         for (var iteration = 0; iteration < limits.For(planned); iteration++)
         {
             var reply = await model.CompleteAsync(conversation, specs, cancellation);
-            conversation.Add(reply);
+            conversation.Add(reply.Message);
 
-            if (!reply.HasToolCalls)
+            if (!reply.Message.HasToolCalls)
             {
-                ui.Show(reply.Content ?? "");
+                ui.Show(reply.Message.Content ?? "");
+                if (reply.Usage is { } usage) ui.ShowUsage(usage);
                 return;
             }
 
-            foreach (var call in reply.ToolCalls!)
+            foreach (var call in reply.Message.ToolCalls!)
             {
                 planned |= call.Name == PlanTool.ToolName;
                 conversation.Add(Message.ToolResult(call.Id, await runner.RunAsync(call, cancellation)));

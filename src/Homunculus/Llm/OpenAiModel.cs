@@ -15,12 +15,12 @@ public sealed class OpenAiModel(HttpClient http, string model) : ILanguageModel
             Timeout = TimeSpan.FromMinutes(5),
         };
 
-    public async Task<Message> CompleteAsync(
+    public async Task<Reply> CompleteAsync(
         IConversation conversation,
         IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation)
     {
-        var request = OpenAiJson.Request(model, conversation, tools);
+        var request = OpenAiJson.BuildRequest(model, conversation, tools);
 
         string body;
         try
@@ -39,7 +39,7 @@ public sealed class OpenAiModel(HttpClient http, string model) : ILanguageModel
 
         try
         {
-            return OpenAiJson.Reply(body);
+            return OpenAiJson.ParseReply(body);
         }
         catch (FormatException e)
         {

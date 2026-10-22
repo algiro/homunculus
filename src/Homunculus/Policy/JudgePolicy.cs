@@ -17,7 +17,7 @@ public sealed class JudgePolicy(ILanguageModel judge) : IPolicy
         conversation.Add(Message.User($"Tool: {tool.Name}\nArguments: {arguments.GetRawText()}"));
 
         var answer = await judge.CompleteAsync(conversation, [], cancellation);
-        return Parse(answer.Content);
+        return Parse(answer.Message.Content);
     }
 
     private static Verdict Parse(string? answer)

@@ -19,7 +19,7 @@ public class ReplTests
     [Test]
     public async Task SendsPlainTextToTheAgent()
     {
-        var model = new ScriptedModel(Reply.Text("hello there"));
+        var model = new ScriptedModel(Replies.Text("hello there"));
 
         await Run(model, "hi");
 
@@ -38,7 +38,7 @@ public class ReplTests
     [Test]
     public async Task EndsOnExitWithoutReadingFurther()
     {
-        var model = new ScriptedModel(Reply.Text("never"));
+        var model = new ScriptedModel(Replies.Text("never"));
 
         await Run(model, "/exit", "hi");
 
@@ -74,7 +74,7 @@ public class ReplTests
     [Test]
     public async Task ClearsTheConversation()
     {
-        var model = new ScriptedModel(Reply.Text("one"), Reply.Text("two"));
+        var model = new ScriptedModel(Replies.Text("one"), Replies.Text("two"));
 
         await Run(model, "first", "/clear", "second");
 
@@ -143,9 +143,9 @@ public class ReplTests
     {
         private bool _failed;
 
-        public Task<Message> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
-            if (_failed) return Task.FromResult(Reply.Text("recovered"));
+            if (_failed) return Task.FromResult(new Reply(Replies.Text("recovered")));
             _failed = true;
             throw new ModelException("boom");
         }
@@ -155,9 +155,9 @@ public class ReplTests
     {
         private bool _cancelled;
 
-        public Task<Message> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
-            if (_cancelled) return Task.FromResult(Reply.Text("recovered"));
+            if (_cancelled) return Task.FromResult(new Reply(Replies.Text("recovered")));
             _cancelled = true;
             throw new OperationCanceledException();
         }

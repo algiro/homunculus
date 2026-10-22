@@ -3,7 +3,7 @@ using Homunculus.Llm;
 namespace Homunculus.Tests.Support;
 
 /// <summary>Builds the assistant messages a model could answer with.</summary>
-public static class Reply
+public static class Replies
 {
     public static Message Text(string content) => Message.Assistant(content);
 

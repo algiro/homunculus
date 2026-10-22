@@ -21,8 +21,8 @@ public class AppTests
 
     private async Task<ScriptedModel> RunCommandWithJudge(string judgeAnswer, params char[] userAnswers)
     {
-        var model = new ScriptedModel(Reply.Tool("run_command", RunEcho), Reply.Text("done"));
-        _app = new TestApp(model, "judge", new ScriptedModel(Reply.Text(judgeAnswer)));
+        var model = new ScriptedModel(Replies.Tool("run_command", RunEcho), Replies.Text("done"));
+        _app = new TestApp(model, "judge", new ScriptedModel(Replies.Text(judgeAnswer)));
         _app.Ui.Answers(userAnswers);
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
@@ -60,7 +60,7 @@ public class AppTests
     public async Task EffectModeIsTheOnlyOneThatNeverConsultsTheJudge()
     {
         var judge = new ScriptedModel();
-        _app = new TestApp(new ScriptedModel(Reply.Tool("run_command", RunEcho), Reply.Text("done")), "effect", judge);
+        _app = new TestApp(new ScriptedModel(Replies.Tool("run_command", RunEcho), Replies.Text("done")), "effect", judge);
         _app.Ui.Answers('y');
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
@@ -72,8 +72,8 @@ public class AppTests
     public async Task DoesNotWriteOutsideTheProjectWhenTheUserRefuses()
     {
         var model = new ScriptedModel(
-            Reply.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
-            Reply.Text("understood"));
+            Replies.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
+            Replies.Text("understood"));
         _app = new TestApp(model, "effect");
         _app.Ui.Answers('n');
 
@@ -86,8 +86,8 @@ public class AppTests
     public async Task WritesOutsideTheProjectWhenTheUserAgrees()
     {
         var model = new ScriptedModel(
-            Reply.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
-            Reply.Text("done"));
+            Replies.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
+            Replies.Text("done"));
         _app = new TestApp(model, "effect");
         _app.Ui.Answers('y');
 
@@ -169,11 +169,11 @@ public class AppTests
 
         public Task Started => _started.Task;
 
-        public async Task<Message> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public async Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             _started.SetResult();
             await Task.Delay(Timeout.Infinite, cancellation);
-            return Reply.Text("unreachable");
+            return new Reply(Replies.Text("unreachable"));
         }
     }
 }

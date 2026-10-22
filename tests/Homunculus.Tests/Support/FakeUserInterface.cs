@@ -1,3 +1,5 @@
+using Homunculus.Llm;
+
 namespace Homunculus.Tests.Support;
 
 public sealed class FakeUserInterface : IUserInterface
@@ -8,6 +10,7 @@ public sealed class FakeUserInterface : IUserInterface
 
     public List<string> Output { get; } = [];
     public List<string> Questions { get; } = [];
+    public List<TokenUsage> Usages { get; } = [];
 
     public string AllOutput => string.Join('\n', Output);
 
@@ -24,6 +27,8 @@ public sealed class FakeUserInterface : IUserInterface
     }
 
     public void Show(string text) => Output.Add(text);
+
+    public void ShowUsage(TokenUsage usage) => Usages.Add(usage);
 
     public char Choose(string question, string options)
     {

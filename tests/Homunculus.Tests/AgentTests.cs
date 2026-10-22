@@ -32,7 +32,7 @@ public class AgentTests
     [Test]
     public async Task ShowsATextReplyAndStops()
     {
-        var agent = Build(new ScriptedModel(Reply.Text("hello")));
+        var agent = Build(new ScriptedModel(Replies.Text("hello")));
 
         await Ask(agent);
 
@@ -40,9 +40,28 @@ public class AgentTests
     }
 
     [Test]
+    public async Task ShowsTheTokensOfTheLastCallAfterTheAnswer()
+    {
+        var usage = new TokenUsage(Input: 10, Output: 5, Total: 15);
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("done")) { Usage = usage };
+
+        await Ask(Build(model));
+
+        Assert.That(_ui.Usages, Is.EqualTo(new[] { usage }));
+    }
+
+    [Test]
+    public async Task ShowsNoTokensWhenTheServerReportsNone()
+    {
+        await Ask(Build(new ScriptedModel(Replies.Text("hello"))));
+
+        Assert.That(_ui.Usages, Is.Empty);
+    }
+
+    [Test]
     public async Task SendsTheSystemPromptTheUserMessageAndTheToolSpecs()
     {
-        var model = new ScriptedModel(Reply.Text("ok"));
+        var model = new ScriptedModel(Replies.Text("ok"));
 
         await Ask(Build(model), "fix the bug");
 
@@ -55,7 +74,7 @@ public class AgentTests
     public async Task RunsARequestedToolAndReturnsTheResultToTheModel()
     {
         _echo.Result = "pong";
-        var model = new ScriptedModel(Reply.Tool("echo", """{"n":1}""", "c1"), Reply.Text("it said pong"));
+        var model = new ScriptedModel(Replies.Tool("echo", """{"n":1}""", "c1"), Replies.Text("it said pong"));
 
         await Ask(Build(model));
 
@@ -69,10 +88,10 @@ public class AgentTests
     public async Task AnswersEveryToolCallOfOneReplyInOrder()
     {
         var model = new ScriptedModel(
-            Reply.Calls(
+            Replies.Calls(
                 new ToolCall("a", "echo", Json.Parse("""{"n":1}""")),
                 new ToolCall("b", "echo", Json.Parse("""{"n":2}"""))),
-            Reply.Text("done"));
+            Replies.Text("done"));
 
         await Ask(Build(model));
 
@@ -83,7 +102,7 @@ public class AgentTests
     [Test]
     public async Task KeepsGoingWhenTheModelAsksForAnUnknownTool()
     {
-        var model = new ScriptedModel(Reply.Tool("fly"), Reply.Text("sorry"));
+        var model = new ScriptedModel(Replies.Tool("fly"), Replies.Text("sorry"));
 
         await Ask(Build(model));
 
@@ -95,7 +114,7 @@ public class AgentTests
     public async Task KeepsGoingWhenAToolFails()
     {
         _echo.Failure = new ToolException("no good");
-        var model = new ScriptedModel(Reply.Tool("echo"), Reply.Text("ok"));
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("ok"));
 
         await Ask(Build(model));
 
@@ -106,7 +125,7 @@ public class AgentTests
     [Test]
     public async Task DoesNotRunAToolThePolicyDenies()
     {
-        var model = new ScriptedModel(Reply.Tool("echo"), Reply.Text("understood"));
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("understood"));
 
         await Ask(Build(model, Verdict.Deny));
 
@@ -118,7 +137,7 @@ public class AgentTests
     [Test]
     public async Task StopsAfterTheIterationLimit()
     {
-        var model = ScriptedModel.Repeating(Reply.Tool("echo"));
+        var model = ScriptedModel.Repeating(Replies.Tool("echo"));
 
         await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
@@ -130,7 +149,7 @@ public class AgentTests
     public async Task AllowsMoreIterationsOnceAPlanWasMade()
     {
         var model = new ScriptedModel(
-            [Reply.Tool("plan", """{"steps":["a"]}"""), .. Enumerable.Repeat(Reply.Tool("echo"), 10)]);
+            [Replies.Tool("plan", """{"steps":["a"]}"""), .. Enumerable.Repeat(Replies.Tool("echo"), 10)]);
 
         await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
@@ -140,7 +159,7 @@ public class AgentTests
     [Test]
     public async Task RemembersTheConversationBetweenMessages()
     {
-        var model = new ScriptedModel(Reply.Text("first"), Reply.Text("second"));
+        var model = new ScriptedModel(Replies.Text("first"), Replies.Text("second"));
         var agent = Build(model);
 
         await Ask(agent, "one");
@@ -152,7 +171,7 @@ public class AgentTests
     [Test]
     public async Task ForgetsTheConversationWhenCleared()
     {
-        var model = new ScriptedModel(Reply.Text("first"), Reply.Text("second"));
+        var model = new ScriptedModel(Replies.Text("first"), Replies.Text("second"));
         var agent = Build(model);
 
         await Ask(agent, "one");
@@ -165,7 +184,7 @@ public class AgentTests
     [Test]
     public void PropagatesCancellation()
     {
-        var agent = Build(new ScriptedModel(Reply.Text("never")));
+        var agent = Build(new ScriptedModel(Replies.Text("never")));
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 

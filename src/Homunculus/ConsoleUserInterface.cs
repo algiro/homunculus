@@ -1,8 +1,16 @@
+using Homunculus.Llm;
+
 namespace Homunculus;
 
 public sealed class ConsoleUserInterface : IUserInterface
 {
     public void Show(string text) => Console.WriteLine(text);
+
+    public void ShowUsage(TokenUsage usage)
+    {
+        var cached = usage.Cached > 0 ? $" ({usage.Cached} cached)" : "";
+        Console.WriteLine($"[tokens: {usage.Input} in{cached}, {usage.Output} out, {usage.Total} total]");
+    }
 
     public char Choose(string question, string options)
     {

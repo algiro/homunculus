@@ -12,20 +12,19 @@ public static class OpenAiJson
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static string Request(string model, IConversation conversation, IReadOnlyList<ToolSpec> tools) =>
+    public static string BuildRequest(string model, IConversation conversation, IReadOnlyList<ToolSpec> tools) =>
         JsonSerializer.Serialize(new OpenAiWire.RequestDto(
             model,
             conversation.Messages.Select(m => m.ToWire()).ToList(),
             tools.Count > 0 ? tools.Select(t => t.ToWire()).ToList() : null), Options);
 
     /// <exception cref="FormatException">The body is not a chat-completions reply.</exception>
-    public static Message Reply(string body)
+    public static Reply ParseReply(string body)
     {
         try
         {
-            var message = JsonSerializer.Deserialize<OpenAiWire.ReplyDto>(body, Options)?.Choices?.FirstOrDefault()?.Message
-                ?? throw new FormatException("no choices[0].message");
-            return Message.Assistant(message.Content, message.ToolCalls?.Select(c => c.FromWire()).ToList());
+            return JsonSerializer.Deserialize<OpenAiWire.ReplyDto>(body, Options)?.FromWire()
+                ?? throw new FormatException("no reply");
         }
         catch (JsonException e)
         {

@@ -18,9 +18,13 @@ internal static class OpenAiWire
 
     public sealed record FunctionSpecDto(string Name, string Description, JsonObject Parameters);
 
-    public sealed record ReplyDto(List<ChoiceDto>? Choices);
+    public sealed record ReplyDto(List<ChoiceDto>? Choices, UsageDto? Usage);
 
     public sealed record ChoiceDto(MessageDto? Message);
+
+    public sealed record UsageDto(int? PromptTokens, PromptTokensDetailsDto? PromptTokensDetails, int? CompletionTokens, int? TotalTokens);
+
+    public sealed record PromptTokensDetailsDto(int? CachedTokens);
 }
 
 /// <summary>Maps our tool and message types to the wire shapes and back.</summary>
@@ -57,6 +61,29 @@ internal static class OpenAiWireMapping
                 call.Id ?? throw new FormatException("tool call without id"),
                 function.Name ?? throw new FormatException("tool call without name"),
                 document.RootElement.Clone());
+        }
+    }
+
+    extension(OpenAiWire.UsageDto usage)
+    {
+        /// <summary>Missing counts become zero; a missing total is the sum of input and output.</summary>
+        public TokenUsage FromWire()
+        {
+            var input = usage.PromptTokens ?? 0;
+            var output = usage.CompletionTokens ?? 0;
+            return new TokenUsage(input, output, usage.TotalTokens ?? input + output, usage.PromptTokensDetails?.CachedTokens ?? 0);
+        }
+    }
+
+    extension(OpenAiWire.ReplyDto reply)
+    {
+        /// <exception cref="FormatException">The reply has no first choice with a message.</exception>
+        public Reply FromWire()
+        {
+            var message = reply.Choices?.FirstOrDefault()?.Message ?? throw new FormatException("no choices[0].message");
+            return new Reply(
+                Message.Assistant(message.Content, message.ToolCalls?.Select(c => c.FromWire()).ToList()),
+                reply.Usage?.FromWire());
         }
     }
 }
