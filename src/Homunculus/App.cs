@@ -1,5 +1,6 @@
 using Homunculus.Commands;
 using Homunculus.Llm;
+using Homunculus.Logging;
 using Homunculus.Policy;
 using Homunculus.Tools;
 
@@ -13,7 +14,7 @@ public sealed class App
         "and to run commands. List a directory before reading files in it, read a file before editing it, " +
         "and keep answers short.";
 
-    public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge)
+    public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
     {
         Tools = new ToolRegistry(
         [
@@ -33,8 +34,8 @@ public sealed class App
         });
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui);
 
-        Runner = new ToolRunner(Tools, approvals, ui);
-        Agent = new Agent(new MeteredModel(model, Usage, "agent"), new Conversation(CodingAgentPrompt), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui);
+        Runner = new ToolRunner(Tools, approvals, ui, log);
+        Agent = new Agent(new MeteredModel(model, Usage, "agent"), new Conversation(CodingAgentPrompt), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
 
         var commands = new CommandRegistry();
         commands

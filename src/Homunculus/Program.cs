@@ -1,5 +1,6 @@
 using Homunculus;
 using Homunculus.Llm;
+using Homunculus.Logging;
 using Homunculus.Tools;
 
 Settings settings;
@@ -13,6 +14,9 @@ catch (InvalidOperationException e)
     return 1;
 }
 
+using var fileLog = settings.LogFile is { } logFile ? new JsonlEventLog(logFile) : null;
+IEventLog log = fileLog ?? (IEventLog)NullEventLog.Instance;
+
 App app;
 try
 {
@@ -21,8 +25,9 @@ try
         settings,
         new ConsoleUserInterface(),
         new ProjectDirectory(Directory.GetCurrentDirectory()),
-        new OpenAiModel(http, settings.Model),
-        new OpenAiModel(http, settings.JudgeModel));
+        new OpenAiModel(http, settings.Model, log),
+        new OpenAiModel(http, settings.JudgeModel, log),
+        log);
 }
 catch (InvalidOperationException e)
 {
