@@ -92,10 +92,11 @@ public class AppTests
 
         await _app.Repl.RunAsync();
 
-        Assert.That(_app.Ui.Output[^1], Is.EqualTo(string.Join('\n',
-            "agent: 2 calls, 20 in, 10 out, 30 total",
-            "judge: 1 call, 3 in (2 cached), 1 out, 4 total",
-            "total: 3 calls, 23 in (2 cached), 11 out, 34 total")));
+        // The model time is real elapsed time, so only its format is checked.
+        Assert.That(_app.Ui.Output[^1], Does.Match(
+            @"^agent: 2 calls, 20 in, 10 out, 30 total, [\d.,]+s\n" +
+            @"judge: 1 call, 3 in \(2 cached\), 1 out, 4 total, [\d.,]+s\n" +
+            @"total: 3 calls, 23 in \(2 cached\), 11 out, 34 total, [\d.,]+s$"));
     }
 
     [Test]

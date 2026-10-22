@@ -10,4 +10,8 @@ internal static class UsageText
         var cached = usage.Cached > 0 ? $" ({usage.Cached} cached)" : "";
         return $"{usage.Input} in{cached}, {usage.Output} out, {usage.Total} total";
     }
+
+    public static string Describe(TimeSpan elapsed) => elapsed.TotalMinutes >= 1
+        ? $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s"
+        : $"{elapsed.TotalSeconds:0.0}s";
 }

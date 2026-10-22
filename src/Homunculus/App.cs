@@ -28,30 +28,38 @@ public sealed class App
 
         Policy = new SwitchablePolicy(new Dictionary<string, IPolicy>
         {
-            ["judge"] = new JudgePolicy(new MeteredModel(judge, Usage, "judge")),
+            ["judge"] = new JudgePolicy(Instrument(judge, "judge")),
             ["effect"] = new FixedPolicy(Verdict.Ask),
             ["allow-all"] = new FixedPolicy(Verdict.Allow),
         });
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui);
 
         Runner = new ToolRunner(Tools, approvals, ui, log);
-        Agent = new Agent(new MeteredModel(model, Usage, "agent"), new Conversation(CodingAgentPrompt), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
+        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
 
         var commands = new CommandRegistry();
         commands
             .Add(new HelpCommand(commands, ui))
             .Add(new ToolsCommand(Tools, ui))
             .Add(new PolicyCommand(Policy, ui))
-            .Add(new UsageCommand(Usage, ui))
+            .Add(new UsageCommand(Usage, ui, Time))
             .Add(new ClearCommand(Agent, ui))
             .Add(new ExitCommand());
         Repl = new Repl(Agent, commands, ui);
     }
 
     public UsageLedger Usage { get; } = new();
+    public TimeLedger Time { get; } = new();
     public ToolRegistry Tools { get; }
     public SwitchablePolicy Policy { get; }
     public ToolRunner Runner { get; }
     public Agent Agent { get; }
     public Repl Repl { get; }
+
+    /// <summary>
+    /// Decorators nest like onion layers: a call goes in through the outer one and comes back out through it.
+    /// Time is the inner layer so it measures the model alone; the token ledger sits around it.
+    /// </summary>
+    private MeteredModel Instrument(ILanguageModel model, string source) =>
+        new MeteredModel(new TimedModel(model, Time, source), Usage, source);
 }
