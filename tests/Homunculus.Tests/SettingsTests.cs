@@ -59,6 +59,18 @@ public class SettingsTests
         Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(7)));
     }
 
+    [TestCase("unlimited")]
+    [TestCase("UNLIMITED")]
+    [TestCase("none")]
+    [TestCase("0")]
+    public void ReadsNoLimitForIterations(string value)
+    {
+        var iterations = From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", value), ("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", value)).Iterations;
+
+        Assert.That(iterations.For(planned: false), Is.Null);
+        Assert.That(iterations.For(planned: true), Is.Null);
+    }
+
     [Test]
     public void FallsBackToTheDefaultForANonNumericValue() =>
         Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", "many")).Iterations.Normal, Is.EqualTo(8));

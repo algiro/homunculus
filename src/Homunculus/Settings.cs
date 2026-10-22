@@ -13,12 +13,17 @@ public sealed record Settings(
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
 
+    private static bool IsUnlimited(string text) =>
+        text.Equals("unlimited", StringComparison.OrdinalIgnoreCase) || text.Equals("none", StringComparison.OrdinalIgnoreCase);
+
     public static Settings FromEnvironment() => From(Environment.GetEnvironmentVariable);
 
     public static Settings From(Func<string, string?> environment)
     {
         string? Env(string name) => environment(name) is { Length: > 0 } value ? value : null;
         int Number(string name, int fallback) => int.TryParse(Env(name), out var value) ? value : fallback;
+        int Limit(string name, int fallback) =>
+            Env(name) is { } text && IsUnlimited(text) ? 0 : Number(name, fallback);
 
         var baseUrl = Env("HOMUNCULUS_BASE_URL") ?? DefaultBaseUrl;
         var model = Env("HOMUNCULUS_MODEL") ?? "gpt-5-mini";
@@ -32,8 +37,8 @@ public sealed record Settings(
             Env("HOMUNCULUS_JUDGE_MODEL") ?? model,
             TimeSpan.FromSeconds(Number("HOMUNCULUS_COMMAND_TIMEOUT_SECONDS", 600)),
             new IterationLimits(
-                Number("HOMUNCULUS_MAX_ITERATIONS", 8),
-                Number("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24)),
+                Limit("HOMUNCULUS_MAX_ITERATIONS", 8),
+                Limit("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24)),
             Env("HOMUNCULUS_TOOLS")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             !bool.TryParse(Env("HOMUNCULUS_SHOW_REASONING"), out var showReasoning) || showReasoning,
             Env("HOMUNCULUS_LOG_FILE"));

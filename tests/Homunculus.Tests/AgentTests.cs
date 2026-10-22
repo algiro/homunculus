@@ -193,14 +193,51 @@ public class AgentTests
     }
 
     [Test]
-    public async Task StopsAfterTheIterationLimit()
+    public async Task AsksAtTheIterationLimitAndStopsWhenTheUserDeclines()
     {
         var model = ScriptedModel.Repeating(Replies.Tool("echo"));
+        _ui.Answers('n');
 
         await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
         Assert.That(model.Calls, Is.EqualTo(3));
+        Assert.That(_ui.Questions, Has.Count.EqualTo(1));
         Assert.That(_ui.Output[^1], Does.Contain("iteration limit"));
+    }
+
+    [Test]
+    public async Task GrantsAnotherBatchEachTimeTheUserAgrees()
+    {
+        var model = ScriptedModel.Repeating(Replies.Tool("echo"));
+        _ui.Answers('y', 'y', 'n');
+
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
+
+        Assert.That(model.Calls, Is.EqualTo(9));
+        Assert.That(_ui.Questions, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public async Task FinishesWithoutAskingWhenTheAnswerComesBeforeTheLimit()
+    {
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("done"));
+
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
+
+        Assert.That(_ui.Questions, Is.Empty);
+        Assert.That(_ui.Output[^1], Is.EqualTo("done"));
+    }
+
+    [Test]
+    public async Task NeverAsksWithoutALimit()
+    {
+        var model = new ScriptedModel([.. Enumerable.Repeat(Replies.Tool("echo"), 50), Replies.Text("done")]);
+
+        await Ask(Build(model, limits: IterationLimits.Unlimited));
+
+        Assert.That(model.Calls, Is.EqualTo(51));
+        Assert.That(_ui.Questions, Is.Empty);
+        Assert.That(_ui.Output[^1], Is.EqualTo("done"));
     }
 
     [Test]
@@ -208,6 +245,7 @@ public class AgentTests
     {
         var model = new ScriptedModel(
             [Replies.Tool("plan", """{"steps":["a"]}"""), .. Enumerable.Repeat(Replies.Tool("echo"), 10)]);
+        _ui.Answers('n');
 
         await Ask(Build(model, limits: new IterationLimits(3, 5)));
 

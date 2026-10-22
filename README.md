@@ -14,8 +14,8 @@ Set `OPENAI_API_KEY` (not needed when `HOMUNCULUS_BASE_URL` points to a local Op
 | `HOMUNCULUS_MODEL` | `gpt-5-mini` |
 | `HOMUNCULUS_JUDGE_MODEL` | same as the model |
 | `HOMUNCULUS_BASE_URL` | `https://api.openai.com/v1` |
-| `HOMUNCULUS_MAX_ITERATIONS` | 8 |
-| `HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING` | 24 |
+| `HOMUNCULUS_MAX_ITERATIONS` | 8; model calls per message before you are asked whether to continue (each `y` allows another batch of the same size). `unlimited`, `none` or `0` never asks |
+| `HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING` | 24; the same, once the agent has made a plan |
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
