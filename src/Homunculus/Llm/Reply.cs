@@ -4,4 +4,10 @@ namespace Homunculus.Llm;
 public sealed record Reply(Message Message, TokenUsage? Usage = null);
 
 /// <summary>Tokens used by one model call. <paramref name="Cached"/> is the part of the input served from the provider's prompt cache.</summary>
-public sealed record TokenUsage(int Input, int Output, int Total, int Cached = 0);
+public sealed record TokenUsage(int Input, int Output, int Total, int Cached = 0)
+{
+    public static TokenUsage None { get; } = new(0, 0, 0);
+
+    public TokenUsage Plus(TokenUsage other) =>
+        new(Input + other.Input, Output + other.Output, Total + other.Total, Cached + other.Cached);
+}

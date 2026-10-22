@@ -69,6 +69,36 @@ public class AppTests
     }
 
     [Test]
+    public async Task UsageSaysSoWhenNothingWasReported()
+    {
+        _app = new TestApp(new ScriptedModel());
+        _app.Ui.TypesLines("/usage");
+
+        await _app.Repl.RunAsync();
+
+        Assert.That(_app.Ui.AllOutput, Does.Contain("No tokens reported yet."));
+    }
+
+    [Test]
+    public async Task UsageCountsTheAgentAndTheJudgeSeparately()
+    {
+        var model = new ScriptedModel(Replies.Tool("run_command", RunEcho), Replies.Text("done"))
+        {
+            Usage = new TokenUsage(10, 5, 15),
+        };
+        var judge = new ScriptedModel(Replies.Text("allow")) { Usage = new TokenUsage(3, 1, 4, Cached: 2) };
+        _app = new TestApp(model, "judge", judge);
+        _app.Ui.TypesLines("go", "/usage");
+
+        await _app.Repl.RunAsync();
+
+        Assert.That(_app.Ui.Output[^1], Is.EqualTo(string.Join('\n',
+            "agent: 2 calls, 20 in, 10 out, 30 total",
+            "judge: 1 call, 3 in (2 cached), 1 out, 4 total",
+            "total: 3 calls, 23 in (2 cached), 11 out, 34 total")));
+    }
+
+    [Test]
     public async Task DoesNotWriteOutsideTheProjectWhenTheUserRefuses()
     {
         var model = new ScriptedModel(
@@ -131,7 +161,7 @@ public class AppTests
 
         await _app.Repl.RunAsync();
 
-        Assert.That(_app.Ui.AllOutput, Does.Contain("/help").And.Contain("/tools").And.Contain("/policy [mode]")
+        Assert.That(_app.Ui.AllOutput, Does.Contain("/help").And.Contain("/tools").And.Contain("/usage").And.Contain("/policy [mode]")
             .And.Contain("/clear").And.Contain("/exit").And.Contain("ctrl-c"));
     }
 

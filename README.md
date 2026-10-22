@@ -19,7 +19,7 @@ Set `OPENAI_API_KEY` (not needed when `HOMUNCULUS_BASE_URL` points to a local Op
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
 
-Commands: `/help`, `/tools`, `/policy [judge|effect|allow-all]`, `/clear`, `/exit`. `ctrl-c` stops a turn.
+Commands: `/help`, `/tools`, `/policy [judge|effect|allow-all]`, `/usage`, `/clear`, `/exit`. `ctrl-c` stops a turn. After each answer the tokens of the last model call are shown; `/usage` adds up the session per source (`agent` and `judge`). Calls that fail, or that the server reports no usage for, are not counted, so the totals are a lower bound.
 
 ## Design
 
