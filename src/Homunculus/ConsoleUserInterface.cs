@@ -12,13 +12,17 @@ public sealed class ConsoleUserInterface : IUserInterface
         Console.ForegroundColor = ConsoleColor.DarkGray;
         try
         {
-            Console.WriteLine($"[thinking] {reasoning}");
+            Console.WriteLine(PrefixLines(reasoning));
         }
         finally
         {
             Console.ForegroundColor = previous;
         }
     }
+
+    /// <summary>Reasoning is often several paragraphs; every line carries the prefix so none reads like part of the answer.</summary>
+    public static string PrefixLines(string reasoning) =>
+        string.Join(Environment.NewLine, reasoning.ReplaceLineEndings("\n").Split('\n').Select(line => $"[thinking] {line}".TrimEnd()));
 
     public void ShowUsage(TokenUsage usage) => Console.WriteLine($"[tokens: {UsageText.Describe(usage)}]");
 
