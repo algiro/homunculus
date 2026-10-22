@@ -22,6 +22,9 @@ public sealed class ScriptedModel : ILanguageModel
     /// <summary>The token usage every reply reports; null means the server reports none.</summary>
     public TokenUsage? Usage { get; set; }
 
+    /// <summary>The reasoning every reply carries; null means the model reports none.</summary>
+    public string? Reasoning { get; set; }
+
     public List<IReadOnlyList<Message>> Conversations { get; } = [];
     public List<IReadOnlyList<ToolSpec>> ToolLists { get; } = [];
     public int Calls => Conversations.Count;
@@ -37,6 +40,6 @@ public sealed class ScriptedModel : ILanguageModel
         ToolLists.Add(tools);
 
         var next = _script.Count > 0 ? _script.Dequeue() : _whenScriptEnds ?? throw new InvalidOperationException("The script has no more replies.");
-        return Task.FromResult(new Reply(next, Usage));
+        return Task.FromResult(new Reply(next, Usage, Reasoning));
     }
 }

@@ -76,4 +76,16 @@ public class SettingsTests
         Assert.That(
             From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_TOOLS", "read_file, list_files ,")).EnabledTools,
             Is.EqualTo(new[] { "read_file", "list_files" }));
+
+    [Test]
+    public void ShowsTheReasoningUnlessSwitchedOff() =>
+        Assert.That(From(("OPENAI_API_KEY", "k")).ShowReasoning, Is.True);
+
+    [TestCase("false", false)]
+    [TestCase("False", false)]
+    [TestCase("true", true)]
+    [TestCase("maybe", true)]
+    [TestCase("", true)]
+    public void ReadsTheShowReasoningSwitch(string value, bool expected) =>
+        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHOW_REASONING", value)).ShowReasoning, Is.EqualTo(expected));
 }

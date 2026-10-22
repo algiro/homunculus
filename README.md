@@ -18,8 +18,9 @@ Set `OPENAI_API_KEY` (not needed when `HOMUNCULUS_BASE_URL` points to a local Op
 | `HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING` | 24 |
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
+| `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 
-Commands: `/help`, `/tools`, `/policy [judge|effect|allow-all]`, `/usage`, `/clear`, `/exit`. `ctrl-c` stops a turn. After each answer the tokens of the last model call are shown; `/usage` adds up the session per source (`agent` and `judge`). Calls that fail, or that the server reports no usage for, are not counted, so the totals are a lower bound.
+Commands: `/help`, `/tools`, `/policy [judge|effect|allow-all]`, `/usage`, `/clear`, `/exit`. `ctrl-c` stops a turn. After each answer the tokens of the last model call are shown; `/usage` adds up the session per source (`agent` and `judge`). Calls that fail, or that the server reports no usage for, are not counted, so the totals are a lower bound. A reply with neither text nor a tool call gets one reminder per message and then ends with "The model returned no answer."; a reply cut off by the output limit is reported as an error.
 
 ## Design
 

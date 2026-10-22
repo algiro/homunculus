@@ -6,6 +6,20 @@ public sealed class ConsoleUserInterface : IUserInterface
 {
     public void Show(string text) => Console.WriteLine(text);
 
+    public void ShowReasoning(string reasoning)
+    {
+        var previous = Console.ForegroundColor;
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        try
+        {
+            Console.WriteLine($"[thinking] {reasoning}");
+        }
+        finally
+        {
+            Console.ForegroundColor = previous;
+        }
+    }
+
     public void ShowUsage(TokenUsage usage) => Console.WriteLine($"[tokens: {UsageText.Describe(usage)}]");
 
     public char Choose(string question, string options)

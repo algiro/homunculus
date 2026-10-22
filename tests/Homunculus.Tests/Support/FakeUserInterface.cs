@@ -11,6 +11,7 @@ public sealed class FakeUserInterface : IUserInterface
     public List<string> Output { get; } = [];
     public List<string> Questions { get; } = [];
     public List<TokenUsage> Usages { get; } = [];
+    public List<string> Reasonings { get; } = [];
 
     public string AllOutput => string.Join('\n', Output);
 
@@ -27,6 +28,8 @@ public sealed class FakeUserInterface : IUserInterface
     }
 
     public void Show(string text) => Output.Add(text);
+
+    public void ShowReasoning(string reasoning) => Reasonings.Add(reasoning);
 
     public void ShowUsage(TokenUsage usage) => Usages.Add(usage);
 

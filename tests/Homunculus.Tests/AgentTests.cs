@@ -20,11 +20,11 @@ public class AgentTests
         _ui = new FakeUserInterface();
     }
 
-    private Agent Build(ScriptedModel model, Verdict verdict = Verdict.Allow, IterationLimits? limits = null)
+    private Agent Build(ScriptedModel model, Verdict verdict = Verdict.Allow, IterationLimits? limits = null, bool showReasoning = true)
     {
         var tools = new ToolRegistry([_echo, new PlanTool()]);
         var runner = new ToolRunner(tools, new Approvals(new FixedPolicy(verdict), _ui), _ui);
-        return new Agent(model, new Conversation(SystemPrompt), tools, runner, limits ?? new IterationLimits(8, 24), _ui);
+        return new Agent(model, new Conversation(SystemPrompt), tools, runner, limits ?? new IterationLimits(8, 24), showReasoning, _ui);
     }
 
     private static Task Ask(Agent agent, string input = "do it") => agent.RespondAsync(input, CancellationToken.None);
@@ -56,6 +56,64 @@ public class AgentTests
         await Ask(Build(new ScriptedModel(Replies.Text("hello"))));
 
         Assert.That(_ui.Usages, Is.Empty);
+    }
+
+    [Test]
+    public async Task ShowsTheReasoningWhenEnabled()
+    {
+        var model = new ScriptedModel(Replies.Text("answer")) { Reasoning = "let me think" };
+
+        await Ask(Build(model));
+
+        Assert.That(_ui.Reasonings, Is.EqualTo(new[] { "let me think" }));
+        Assert.That(_ui.Output[^1], Is.EqualTo("answer"));
+    }
+
+    [Test]
+    public async Task HidesTheReasoningWhenDisabled()
+    {
+        var model = new ScriptedModel(Replies.Text("answer")) { Reasoning = "let me think" };
+
+        await Ask(Build(model, showReasoning: false));
+
+        Assert.That(_ui.Reasonings, Is.Empty);
+        Assert.That(_ui.Output[^1], Is.EqualTo("answer"));
+    }
+
+    [Test]
+    public async Task RemindsTheModelOnceWhenItReturnsNothingAndKeepsTheEmptyMessageOut()
+    {
+        var model = new ScriptedModel(Replies.Text(""), Replies.Text("answer"));
+
+        await Ask(Build(model));
+
+        Assert.That(model.Calls, Is.EqualTo(2));
+        Assert.That(model.LastConversation.Select(m => m.Role), Is.EqualTo(new[] { Role.System, Role.User, Role.User }));
+        Assert.That(_ui.Output[^1], Is.EqualTo("answer"));
+    }
+
+    [Test]
+    public async Task GivesUpWhenTheModelReturnsNothingAgain()
+    {
+        var model = new ScriptedModel(Replies.Text(""), Replies.Text("   "));
+
+        await Ask(Build(model));
+
+        Assert.That(model.Calls, Is.EqualTo(2));
+        Assert.That(_ui.Output, Is.EqualTo(new[] { "The model returned no answer." }));
+    }
+
+    [Test]
+    public async Task OnlyRemindsOncePerMessage()
+    {
+        var model = ScriptedModel.Repeating(Replies.Text(""));
+        var agent = Build(model);
+
+        await Ask(agent, "one");
+        await Ask(agent, "two");
+
+        Assert.That(model.Calls, Is.EqualTo(4));
+        Assert.That(_ui.Output, Is.EqualTo(new[] { "The model returned no answer.", "The model returned no answer." }));
     }
 
     [Test]

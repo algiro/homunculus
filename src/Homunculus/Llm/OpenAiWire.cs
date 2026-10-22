@@ -20,7 +20,14 @@ internal static class OpenAiWire
 
     public sealed record ReplyDto(List<ChoiceDto>? Choices, UsageDto? Usage);
 
-    public sealed record ChoiceDto(MessageDto? Message);
+    public sealed record ChoiceDto(ReplyMessageDto? Message, string? FinishReason = null);
+
+    /// <summary>The assistant's message as a server answers with it; the thinking of a reasoning model arrives as <c>reasoning</c> or <c>reasoning_content</c>.</summary>
+    public sealed record ReplyMessageDto(
+        string? Content,
+        List<ToolCallDto>? ToolCalls = null,
+        string? Reasoning = null,
+        string? ReasoningContent = null);
 
     public sealed record UsageDto(int? PromptTokens, PromptTokensDetailsDto? PromptTokensDetails, int? CompletionTokens, int? TotalTokens);
 
@@ -77,13 +84,19 @@ internal static class OpenAiWireMapping
 
     extension(OpenAiWire.ReplyDto reply)
     {
-        /// <exception cref="FormatException">The reply has no first choice with a message.</exception>
+        /// <exception cref="FormatException">The reply has no first choice with a message, or the model was cut off.</exception>
         public Reply FromWire()
         {
-            var message = reply.Choices?.FirstOrDefault()?.Message ?? throw new FormatException("no choices[0].message");
+            var choice = reply.Choices?.FirstOrDefault();
+            var message = choice?.Message ?? throw new FormatException("no choices[0].message");
+            if (choice.FinishReason == "length")
+                throw new FormatException("the reply was cut off by the output limit (finish_reason: length)");
+
+            var reasoning = message.Reasoning ?? message.ReasoningContent;
             return new Reply(
                 Message.Assistant(message.Content, message.ToolCalls?.Select(c => c.FromWire()).ToList()),
-                reply.Usage?.FromWire());
+                reply.Usage?.FromWire(),
+                string.IsNullOrWhiteSpace(reasoning) ? null : reasoning.Trim());
         }
     }
 }
