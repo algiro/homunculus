@@ -11,6 +11,13 @@ public class ConsoleUserInterfaceTests
     }
 
     [Test]
+    public void QuitHintNamesTheEndOfInputKeyOfThePlatform()
+    {
+        Assert.That(ConsoleUserInterface.QuitHint(windows: false), Is.EqualTo("Use /exit or Ctrl-D to quit."));
+        Assert.That(ConsoleUserInterface.QuitHint(windows: true), Is.EqualTo("Use /exit or Ctrl-Z then Enter to quit."));
+    }
+
+    [Test]
     public void PrefixesSingleLineReasoning() =>
         Assert.That(ConsoleUserInterface.PrefixLines("hmm"), Is.EqualTo("[thinking] hmm"));
 }

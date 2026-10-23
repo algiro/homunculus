@@ -39,9 +39,30 @@ public sealed class ConsoleUserInterface : IUserInterface
 
     public string? ReadLine()
     {
+        // At the prompt ctrl-c has nothing to stop, so it explains how to quit instead of killing the program.
+        ConsoleCancelEventHandler handler = (_, e) =>
+        {
+            e.Cancel = true;
+            Console.WriteLine();
+            Console.WriteLine(QuitHint(OperatingSystem.IsWindows()));
+            Console.Write("> ");
+        };
+
         Console.Write("> ");
-        return Console.ReadLine();
+        Console.CancelKeyPress += handler;
+        try
+        {
+            return Console.ReadLine();
+        }
+        finally
+        {
+            Console.CancelKeyPress -= handler;
+        }
     }
+
+    /// <summary>The Windows console does not treat ctrl-d as the end of input; ctrl-z then Enter is its equivalent.</summary>
+    public static string QuitHint(bool windows) =>
+        windows ? "Use /exit or Ctrl-Z then Enter to quit." : "Use /exit or Ctrl-D to quit.";
 
     public IDisposable ListenForCancel(Action onCancel)
     {
