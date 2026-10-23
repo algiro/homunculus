@@ -15,8 +15,8 @@ public class SettingsTests
 
         Assert.That(settings.ApiKey, Is.EqualTo("sk-1"));
         Assert.That(settings.BaseUrl, Is.EqualTo("https://api.openai.com/v1"));
-        Assert.That(settings.Model, Is.EqualTo("gpt-5-mini"));
-        Assert.That(settings.JudgeModel, Is.EqualTo("gpt-5-mini"));
+        Assert.That(settings.Model, Is.EqualTo("qwen3:8b"));
+        Assert.That(settings.JudgeModel, Is.EqualTo("qwen3:8b"));
         Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(600)));
         Assert.That(settings.Iterations.Normal, Is.EqualTo(8));
         Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(24));
@@ -77,7 +77,7 @@ public class SettingsTests
 
     [Test]
     public void TreatsEmptyValuesAsUnset() =>
-        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MODEL", "")).Model, Is.EqualTo("gpt-5-mini"));
+        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MODEL", "")).Model, Is.EqualTo("qwen3:8b"));
 
     [Test]
     public void AllToolsAreEnabledUnlessListed() =>

@@ -26,7 +26,7 @@ public sealed record Settings(
             Env(name) is { } text && IsUnlimited(text) ? 0 : Number(name, fallback);
 
         var baseUrl = Env("HOMUNCULUS_BASE_URL") ?? DefaultBaseUrl;
-        var model = Env("HOMUNCULUS_MODEL") ?? "gpt-5-mini";
+        var model = Env("HOMUNCULUS_MODEL") ?? "qwen3:8b";
         var apiKey = Env("OPENAI_API_KEY")
             ?? (baseUrl != DefaultBaseUrl ? "none" : throw new InvalidOperationException("Set OPENAI_API_KEY."));
 
