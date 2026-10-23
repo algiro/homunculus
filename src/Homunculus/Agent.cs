@@ -28,24 +28,10 @@ public sealed class Agent(
         var specs = tools.Specs();
         var planned = false;
         var nudged = false;
-        var extended = 0;
+        var budget = new IterationBudget(limits, ui, _log);
 
-        for (var iteration = 0; ; iteration++)
+        while (budget.TryTakeTurn(planned))
         {
-            // At the limit the user decides; each yes grants another full batch (and a plan raises the batch size).
-            if (limits.For(planned) is { } batch && iteration >= batch + extended)
-            {
-                _log.Write("iteration_limit", new { iteration });
-                if (ui.Choose($"Reached {iteration} model calls for this message. Continue for {batch} more?", "yn") != 'y')
-                {
-                    _log.Write("turn_end", new { reason = "iteration_limit" });
-                    ui.Show("Stopped: iteration limit reached for this message.");
-                    return;
-                }
-
-                extended += batch;
-            }
-
             var reply = await model.CompleteAsync(conversation, specs, cancellation);
             if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
             if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
@@ -53,7 +39,7 @@ public sealed class Agent(
             // What the model said, as parsed, whether or not it is shown: text that comes with tool calls is never displayed.
             _log.Write("reply", new
             {
-                iteration,
+                iteration = budget.Used - 1,
                 reasoning = reply.Reasoning,
                 content = reply.Message.Content,
                 toolCalls = reply.Message.ToolCalls?.Select(c => c.Name).ToArray(),
@@ -72,7 +58,7 @@ public sealed class Agent(
                     return;
                 }
 
-                _log.Write("nudge", new { iteration });
+                _log.Write("nudge", new { iteration = budget.Used - 1 });
                 nudged = true;
                 conversation.Add(Message.User(Nudge));
                 continue;
@@ -84,7 +70,7 @@ public sealed class Agent(
             {
                 ui.Show(reply.Message.Content!);
                 if (reply.Usage is { } usage) ui.ShowUsage(usage);
-                _log.Write("turn_end", new { reason = "answer", iterations = iteration + 1 });
+                _log.Write("turn_end", new { reason = "answer", iterations = budget.Used });
                 return;
             }
 
@@ -94,6 +80,9 @@ public sealed class Agent(
                 conversation.Add(Message.ToolResult(call.Id, await runner.RunAsync(call, cancellation)));
             }
         }
+
+        _log.Write("turn_end", new { reason = "iteration_limit" });
+        ui.Show("Stopped: iteration limit reached for this message.");
     }
 
     private static bool IsEmpty(Message message) => !message.HasToolCalls && string.IsNullOrWhiteSpace(message.Content);
