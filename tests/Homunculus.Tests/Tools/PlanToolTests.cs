@@ -5,7 +5,10 @@ namespace Homunculus.Tests.Tools;
 
 public class PlanToolTests
 {
-    private readonly PlanTool _tool = new();
+    private readonly Plan _plan = new();
+    private readonly PlanTool _tool;
+
+    public PlanToolTests() => _tool = new PlanTool(_plan);
 
     private Task<string> Run(string json) => _tool.RunAsync(Json.Parse(json), CancellationToken.None);
 
@@ -49,4 +52,35 @@ public class PlanToolTests
     [Test]
     public void IsAPlanWithoutAFileTarget() =>
         Assert.That(_tool.EffectOf(Json.Parse("{}")), Is.EqualTo(ToolEffect.Planning));
+
+    [Test]
+    public async Task KeepsTheStepsOfAValidCall()
+    {
+        await Run("""{"steps":["[x] read","[ ] edit"]}""");
+
+        Assert.That(_plan.Steps, Is.EqualTo(new[] { "[x] read", "[ ] edit" }));
+    }
+
+    [Test]
+    public async Task ReplacesTheEarlierPlanWithTheLatestOne()
+    {
+        await Run("""{"steps":["a","b"]}""");
+        await Run("""{"steps":["c"]}""");
+
+        Assert.That(_plan.Steps, Is.EqualTo(new[] { "c" }));
+    }
+
+    [Test]
+    public async Task KeepsTheEarlierPlanWhenACallIsInvalid()
+    {
+        await Run("""{"steps":["a"]}""");
+
+        Assert.ThrowsAsync<ToolException>(() => Run($$"""{"steps":["{{new string('x', Limits.PlanStepChars + 1)}}"]}"""));
+
+        Assert.That(_plan.Steps, Is.EqualTo(new[] { "a" }));
+    }
+
+    [Test]
+    public void AsksTheModelToMarkFinishedStepsInItsDescription() =>
+        Assert.That(_tool.Description, Does.Contain("[x]").And.Contain("[ ]"));
 }

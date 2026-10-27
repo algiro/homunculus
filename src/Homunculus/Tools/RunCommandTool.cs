@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -12,7 +13,13 @@ namespace Homunculus.Tools;
 /// </summary>
 public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout, AllowedPrograms? allowed = null, ProgramLocator? locator = null) : ITool
 {
-    public const string ToolName = "run_command";
+private readonly Shell _shell = shell ?? Shell.Detect();
+
+public string Name => "run_command";
+public string Description =>
+    $"Run a command line with {_shell.Name} in the project directory ({RuntimeInformation.OSDescription}) " +
+    $"and return its output and exit code. Use only syntax that {_shell.Name} understands.";
+public JsonObject Parameters => Schema.Of(Parameter.Required("command", "The command line to run."));
 
     private readonly AllowedPrograms _allowed = allowed ?? new AllowedPrograms(AllowedPrograms.Defaults);
     private readonly ProgramLocator _locator = locator ?? new ProgramLocator(project);
@@ -82,8 +89,13 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout, A
     /// <summary>The program and its arguments, with an explanation the model can act on when they are not given that way.</summary>
     private static (string Program, IReadOnlyList<string> Arguments) Parse(JsonElement arguments)
     {
-        var program = arguments.OptionalText("program")?.Trim();
-        if (string.IsNullOrEmpty(program))
+var program = arguments.OptionalText("program")?.Trim();
+if (string.IsNullOrEmpty(program))
+{
+    // fallback or error handling here if needed
+}
+
+var info = new ProcessStartInfo(_shell.Executable);
         {
             if (arguments.OptionalText("command") is not null)
                 throw new ToolException(
@@ -127,7 +139,7 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout, A
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        foreach (var argument in args) info.ArgumentList.Add(argument);
+foreach (var argument in args) info.ArgumentList.Add(argument);
         return Process.Start(info)!;
     }
 

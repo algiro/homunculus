@@ -114,7 +114,8 @@ Type a message to talk to the agent. A line that starts with `/` is a command an
 | `/policy` | Shows the current approval mode and the available ones. |
 | `/policy <mode>` | Sets the approval mode: `judge`, `effect` or `allow-all` ([modes](#approvals)). The prompt always shows the mode, such as `[judge] > `, and switching to `allow-all` prints a warning. |
 | `/usage` | Shows, per source (`agent` and `judge`) and in total, the calls, tokens and time spent waiting for the model in this session. |
-| `/clear` | Forgets the conversation and starts again from the system prompt. The usage totals are kept. |
+| `/plan` | Shows the plan the agent recorded; steps it finished start with `[x]`, open ones with `[ ]`. |
+| `/clear` | Forgets the conversation and starts again from the system prompt. The plan is forgotten too; the usage totals are kept. |
 | `/exit` | Quits. |
 
 While the program is running:
@@ -138,7 +139,7 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. |
 | `delete_file` | Deletes a file. Directories are refused. |
 | `run_command` | Starts one program with a list of arguments, such as `{"program":"dotnet","args":["test"]}`, in the project folder and returns its output and exit code. No shell is involved, so `;`, `|`, `&&`, `$(...)` and redirects are plain text to the program. The program is looked up on `PATH` only, never in the project folder; on Windows only `.exe` and `.com` files run. Stops after the timeout. |
-| `plan` | Records the steps of the work ahead (at most 20 steps). Making a plan raises the iteration limit. |
+| `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
 Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text.
 

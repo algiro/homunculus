@@ -158,4 +158,30 @@ public class RunCommandToolTests
         Assert.That(tool.Description, Does.Contain("No shell").And.Contain("Allowed programs: dotnet, npm").And.Contain("read_file"));
         Assert.That(tool.Parameters["required"]!.AsArray().Select(n => n!.GetValue<string>()), Is.EqualTo(new[] { "program" }));
     }
+
+    public void IsACommandWithoutAFileTarget() =>
+        Assert.That(ToolWithTimeout(TimeSpan.FromSeconds(1)).EffectOf(Json.Parse("{}")), Is.EqualTo(ToolEffect.Running));
+
+    [Test]
+    public void NamesTheShellItRunsInItsDescription()
+    {
+        var detected = Shell.Detect();
+        var tool = new RunCommandTool(_project.Location, TimeSpan.FromSeconds(1), detected with { Name = "custom-shell" });
+
+        Assert.That(tool.Description, Does.Contain("custom-shell"));
+    }
+
+    [Test]
+    public void NamesTheRealShellOfThisMachineByDefault() =>
+        Assert.That(ToolWithTimeout(TimeSpan.FromSeconds(1)).Description,
+            Does.Contain(OperatingSystem.IsWindows() ? "cmd.exe" : "sh"));
+
+    [Test]
+    public void DetectsTheShellOfTheOperatingSystem()
+    {
+        var shell = Shell.Detect();
+
+        Assert.That(shell.Executable, Is.EqualTo(OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh"));
+        Assert.That(shell.RunFlag, Is.EqualTo(OperatingSystem.IsWindows() ? "/c" : "-c"));
+    }
 }
