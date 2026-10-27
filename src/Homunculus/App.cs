@@ -23,7 +23,7 @@ public sealed class App
             new ReadFileTool(project),
             new EditFileTool(project),
             new DeleteFileTool(project),
-            new RunCommandTool(project, settings.CommandTimeout),
+            new RunCommandTool(project, settings.CommandTimeout, settings.Shell),
             new PlanTool(Plan),
         ], settings.EnabledTools);
 

@@ -101,4 +101,14 @@ public class RunCommandToolTests
 
         Assert.That(result, Does.Contain("hello").And.Contain("[exit code 3]"));
     }
+
+    [Test]
+    public void ReportsAShellThatCannotBeStartedAsAToolError()
+    {
+        var tool = new RunCommandTool(_project.Location, TimeSpan.FromSeconds(5), new Shell("ghost-shell", "no-such-shell-program", ["-c"]));
+
+        var error = Assert.ThrowsAsync<ToolException>(() => Run(tool, "echo hi"));
+
+        Assert.That(error!.Message, Does.StartWith("Cannot start ghost-shell"));
+    }
 }
