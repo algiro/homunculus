@@ -363,4 +363,15 @@ public class AppTests
             return new Reply(Replies.Text("unreachable"));
         }
     }
+
+    [Test]
+    public async Task UsesTheShellChosenInTheSettings()
+    {
+        var model = new ScriptedModel(Replies.Text("hi"));
+        _app = new TestApp(model, settings: TestApp.DefaultSettings with { Shell = Shell.Named("sh") });
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(model.ToolLists[0].Single(tool => tool.Name == "run_command").Description, Does.Contain("with sh in"));
+    }
 }

@@ -100,6 +100,7 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
 | `HOMUNCULUS_ALLOWED_PROGRAMS` | `dotnet,git`; the programs `run_command` may start under the approval mode. Any other program asks you every time. `none` allows none |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
+| `HOMUNCULUS_SHELL` | detected: PowerShell 7, else Windows PowerShell, else `cmd.exe` on Windows, `sh` elsewhere; set `pwsh`, `powershell`, `cmd` or `sh` to force one |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
 
