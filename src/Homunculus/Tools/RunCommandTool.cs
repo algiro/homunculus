@@ -63,7 +63,7 @@ public JsonObject Parameters => Schema.Of(Parameter.Required("command", "The com
     public async Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation)
     {
 var (output, exitCode) = await _runner.RunAsync(arguments.Text("command"), cancellation);
-return $"{output}\n[exit code {exitCode}]".Truncate(Limits.OutputChars);
+return $"{output}\n[exit code {exitCode}]".TruncateKeepingEnd(Limits.CommandOutputChars);
     }
 /// <summary>The program and its arguments, with an explanation the model can act on when they are not given that way.</summary>
 private static (string Program, IReadOnlyList<string> Arguments) Parse(JsonElement arguments)

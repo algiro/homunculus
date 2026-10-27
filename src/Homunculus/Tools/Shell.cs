@@ -8,7 +8,7 @@ public sealed record Shell(string Name, string Executable, IReadOnlyList<string>
     private static Shell Cmd { get; } = new("cmd.exe", "cmd.exe", ["/c"]);
 
     /// <summary>The best shell this machine has: PowerShell (7, else Windows PowerShell) or cmd.exe on Windows, sh elsewhere.</summary>
-    public static Shell Detect() => Detect(OperatingSystem.IsWindows(), IsOnPath);
+    public static Shell Detect() => Detect(OperatingSystem.IsWindows(), Executables.IsOnPath);
 
     public static Shell Detect(bool windows, Func<string, bool> isOnPath)
     {
@@ -32,9 +32,4 @@ public sealed record Shell(string Name, string Executable, IReadOnlyList<string>
         new(executable, executable, ["-NoProfile", "-NonInteractive", "-Command"]);
 
     private static string WithoutExe(string name) => name.EndsWith(".exe", StringComparison.Ordinal) ? name[..^4] : name;
-
-    private static bool IsOnPath(string executable) =>
-        (Environment.GetEnvironmentVariable("PATH") ?? "")
-        .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-        .Any(directory => File.Exists(Path.Combine(directory.Trim('"'), executable)));
 }

@@ -54,8 +54,8 @@ public sealed record Settings(
             Env("HOMUNCULUS_JUDGE_MODEL") ?? model,
             TimeSpan.FromSeconds(Number("HOMUNCULUS_COMMAND_TIMEOUT_SECONDS", 600)),
             new IterationLimits(
-                Limit("HOMUNCULUS_MAX_ITERATIONS", 8),
-                Limit("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 24)),
+                Limit("HOMUNCULUS_MAX_ITERATIONS", 16),
+                Limit("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", 32)),
             Env("HOMUNCULUS_TOOLS")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             !bool.TryParse(Env("HOMUNCULUS_SHOW_REASONING"), out var showReasoning) || showReasoning,
             Env("HOMUNCULUS_LOG_FILE"),

@@ -7,12 +7,19 @@ namespace Homunculus;
 /// Reads lines from the user: slash commands go to the command registry, anything else goes to the agent. It opens with the
 /// banner when given what to put in it.
 /// </summary>
-public sealed class Repl(Agent agent, CommandRegistry commands, IUserInterface ui, Func<string>? prompt = null, Func<BannerDetails>? banner = null)
+public sealed class Repl(
+    Agent agent,
+    CommandRegistry commands,
+    IUserInterface ui,
+    Func<string>? prompt = null,
+    Func<BannerDetails>? banner = null,
+    string? startupNote = null)
 {
     public async Task RunAsync()
     {
         if (banner is not null) ui.ShowBanner(banner());
         else ui.Show("homunculus - type /help for commands.");
+        if (startupNote is not null) ui.Show(startupNote);
         while (ui.ReadLine(prompt?.Invoke() ?? "> ") is { } line)
         {
             var input = line.Trim();
