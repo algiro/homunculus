@@ -5,7 +5,9 @@ namespace Homunculus.Tools;
 
 public sealed class ReadFileTool(ProjectDirectory project, ReadFiles? reads = null) : FileTool(project)
 {
-    public override string Name => "read_file";
+    public const string ToolName = "read_file";
+
+    public override string Name => ToolName;
     public override string Description => $"Read a text file (at most {Limits.OutputChars} characters).";
     public override JsonObject Parameters => Schema.Of(Parameter.Required("path", "File to read."));
     protected override ToolAccess Access => ToolAccess.Read;
