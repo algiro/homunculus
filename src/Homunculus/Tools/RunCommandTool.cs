@@ -139,7 +139,8 @@ var info = new ProcessStartInfo(_shell.Executable);
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-foreach (var argument in args) info.ArgumentList.Add(argument);
+foreach (var argument in _shell.Arguments) info.ArgumentList.Add(argument);
+info.ArgumentList.Add(command);
         return Process.Start(info)!;
     }
 

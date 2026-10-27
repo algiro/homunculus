@@ -15,6 +15,8 @@ public class RunCommandToolTests
 
     private RunCommandTool Tool() => ToolWithTimeout(TimeSpan.FromSeconds(30));
 
+    private static readonly bool IsCmd = Shell.Detect().Name == "cmd.exe";
+
     private static Task<string> Run(RunCommandTool tool, string program, string[] args, CancellationToken cancellation = default) =>
         tool.RunAsync(Json.Parse(JsonSerializer.Serialize(new { program, args })), cancellation);
 
@@ -23,9 +25,8 @@ public class RunCommandToolTests
         OperatingSystem.IsWindows()
             ? Run(tool, "cmd", ["/c", line], cancellation)
             : Run(tool, "sh", ["-c", line], cancellation);
-
     private static string Sleep(int seconds) =>
-        OperatingSystem.IsWindows() ? $"ping -n {seconds + 1} 127.0.0.1 > nul" : $"sleep {seconds}";
+        OperatingSystem.IsWindows() ? $"ping -n {seconds + 1} 127.0.0.1" : $"sleep {seconds}";
 
     [Test]
     public async Task ReturnsTheOutputAndExitCode()
@@ -55,6 +56,7 @@ public class RunCommandToolTests
     [Test]
     public void FailsWhenTheCommandRunsLongerThanTheTimeout()
     {
+        var command = IsCmd ? "cd" : "pwd";
         var error = Assert.ThrowsAsync<ToolException>(() => RunShell(ToolWithTimeout(TimeSpan.FromMilliseconds(500)), Sleep(10)));
 
         Assert.That(error!.Message, Does.Contain("timed out"));
@@ -71,6 +73,7 @@ public class RunCommandToolTests
     [Test]
     public async Task GivesShellCharactersToTheProgramSoNothingElseRuns()
     {
+        var result = await Run(ToolWithTimeout(TimeSpan.FromSeconds(30)), IsCmd || !OperatingSystem.IsWindows() ? "echo oops 1>&2" : "[Console]::Error.WriteLine('oops')");
         string[] args = ["--version", ";", "mkdir", "pwned1", "&&", "mkdir", "pwned2", "|", "mkdir", "pwned3", "&", "mkdir", "pwned4", "$(mkdir pwned5)", "`mkdir pwned6`", ">", "pwned7"];
 
         await Run(Tool(), "dotnet", args);
@@ -174,14 +177,16 @@ public class RunCommandToolTests
     [Test]
     public void NamesTheRealShellOfThisMachineByDefault() =>
         Assert.That(ToolWithTimeout(TimeSpan.FromSeconds(1)).Description,
-            Does.Contain(OperatingSystem.IsWindows() ? "cmd.exe" : "sh"));
+            Does.Contain(Shell.Detect().Name));
 
     [Test]
-    public void DetectsTheShellOfTheOperatingSystem()
+    public async Task RunsCommandsInTheCmdFallbackToo()
     {
-        var shell = Shell.Detect();
+        Assume.That(OperatingSystem.IsWindows());
+        var cmd = Shell.Detect(windows: true, _ => false);
 
-        Assert.That(shell.Executable, Is.EqualTo(OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh"));
-        Assert.That(shell.RunFlag, Is.EqualTo(OperatingSystem.IsWindows() ? "/c" : "-c"));
+        var result = await Run(new RunCommandTool(_project.Location, TimeSpan.FromSeconds(30), cmd), "echo hello & exit 3");
+
+        Assert.That(result, Does.Contain("hello").And.Contain("[exit code 3]"));
     }
 }
