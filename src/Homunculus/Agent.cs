@@ -18,6 +18,7 @@ public sealed class Agent(
     ReadFiles? reads = null)
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
+    private readonly StaleReads _stale = new();
 
     private const string Nudge = "You neither called a tool nor gave an answer. Call a tool now, or answer.";
 
@@ -25,6 +26,7 @@ public sealed class Agent(
     {
         conversation.Clear();
         reads?.Forget();
+        _stale.Forget();
     }
 
     public async Task RespondAsync(string input, CancellationToken cancellation)
@@ -98,7 +100,9 @@ public sealed class Agent(
             foreach (var call in reply.Message.ToolCalls!)
             {
                 planned |= call.Name == PlanTool.ToolName;
-                conversation.Add(Message.ToolResult(call.Id, await runner.RunAsync(call, cancellation)));
+                var result = await runner.RunAsync(call, cancellation);
+                conversation.Add(Message.ToolResult(call.Id, result));
+                _stale.AfterCall(conversation, call, EffectOf(call), result);
             }
 
             if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
@@ -111,6 +115,19 @@ public sealed class Agent(
 
         _log.Write("turn_end", new { reason = "iteration_limit" });
         ui.Show("Stopped: iteration limit reached for this message.");
+    }
+
+    /// <summary>What the call does to a file, or null when the call is not one the tools can describe.</summary>
+    private ToolEffect? EffectOf(ToolCall call)
+    {
+        try
+        {
+            return tools.Find(call.Name)?.EffectOf(call.Arguments);
+        }
+        catch (ToolException)
+        {
+            return null;
+        }
     }
 
     private static bool IsEmpty(Message message) => !message.HasToolCalls && string.IsNullOrWhiteSpace(message.Content);

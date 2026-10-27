@@ -31,7 +31,7 @@ public sealed class InsertLinesTool(ProjectDirectory project, ChangedFiles? chan
 
         RefuseDirectory(path);
         if (!File.Exists(path))
-            throw new ToolException($"File not found: {path}. To create a file, use edit_file with an empty old_str.");
+            throw new ToolException($"File not found: {path}. To create a file, use write_file.");
         if (anchor.Count == 0)
             throw new ToolException("line must be an existing line of the file, copied from it.");
         if (text.Trim().Length == 0)

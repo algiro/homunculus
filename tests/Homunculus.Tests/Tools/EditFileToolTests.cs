@@ -108,7 +108,7 @@ public class EditFileToolTests
     {
         var error = Assert.ThrowsAsync<ToolException>(() => Run("nope.txt", "a", "b"));
 
-        Assert.That(error!.Message, Does.Contain("empty old_str"));
+        Assert.That(error!.Message, Does.Contain("use write_file"));
     }
 
     [Test]

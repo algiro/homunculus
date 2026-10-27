@@ -5,18 +5,18 @@ namespace Homunculus.Tools;
 
 public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes = null, ReadFiles? reads = null) : FileTool(project)
 {
+    private readonly NewFileWriter _writer = new(project, changes, reads);
+
     public override string Name => "edit_file";
     public override string Description =>
         "Replace the single exact occurrence of old_str with new_str in a file; to add something, keep the old text in new_str too " +
         "(to add lines next to an existing line, insert_lines is simpler). " +
-        "With an empty old_str, create a new file containing new_str.";
+        "With an empty old_str it creates a new file containing new_str, but write_file is simpler for that.";
     public override JsonObject Parameters => Schema.Of(
         Parameter.Required("path", "File to edit or create."),
         Parameter.Required("old_str", "Exact text to replace; must match exactly once. Empty to create a file."),
         Parameter.Required("new_str", "Replacement text."));
     protected override ToolAccess Access => ToolAccess.Write;
-
-    private const int MaxNamedFiles = 5;
 
     protected override string Run(JsonElement arguments, string path)
     {
@@ -29,13 +29,13 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
             throw new ToolException(EscapedLineBreaks.Complaint("new_str"));
 
         if (oldText.Length == 0)
-            return Create(path, newText);
+            return _writer.Create(path, newText, "Use a non-empty old_str to edit it.");
 
         if (oldText == newText)
             throw new ToolException("old_str and new_str are identical, so there is nothing to change. Make new_str the text you want instead.");
 
         if (!File.Exists(path))
-            throw new ToolException($"File not found: {path}. To create a file, use an empty old_str.");
+            throw new ToolException($"File not found: {path}. To create a file, use write_file.");
 
         var content = File.ReadAllText(path);
         (oldText, newText) = MatchLineEndings(content, oldText, newText);
@@ -90,54 +90,6 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
             : (oldText, newText);
 
     private static string WithWindowsLineEndings(string text) => text.Replace("\r\n", "\n").Replace("\n", "\r\n");
-
-    private string Create(string path, string content)
-    {
-        if (File.Exists(path))
-            throw new ToolException($"File already exists: {path}. Use a non-empty old_str to edit it.");
-
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, content);
-        changes?.Created(path);
-        return $"Created {path}{UnreadFilesNote(path, content)}";
-    }
-
-    /// <summary>
-    /// A new file is better written after looking at what it builds on. First choice: files of the same kind (same extension)
-    /// named after a name the new code uses (ICommand for ": ICommand"), found in its folder or above it, that the model has
-    /// not read. Failing that, any neighbour at all.
-    /// </summary>
-    private string UnreadFilesNote(string path, string content)
-    {
-        if (reads is null) return "";
-
-        var folder = Path.GetDirectoryName(path)!;
-        var used = Identifiers.In(content);
-        var extension = Path.GetExtension(path);
-        var unread = FoldersFrom(folder)
-            .SelectMany(Directory.EnumerateFiles)
-            .Where(other => other != path && Path.GetExtension(other) == extension
-                            && used.Contains(Path.GetFileNameWithoutExtension(other)) && !reads.HasRead(other))
-            .Distinct().Order(StringComparer.Ordinal).Take(MaxNamedFiles).ToArray();
-        if (unread.Length > 0)
-        {
-            var names = string.Join(", ", unread.Select(Path.GetFileNameWithoutExtension).Distinct());
-            var files = string.Join(", ", unread.Select(Relative));
-            return $". It uses {names}, defined in {files}, which you have not read. Read them and check that this file matches.";
-        }
-
-        var hasNeighbours = Directory.EnumerateFiles(folder).Any(other => other != path);
-        return !hasNeighbours || reads.HasReadAnyIn(folder)
-            ? ""
-            : $". You have not read any other file in {Relative(folder)} yet; if this file should follow the ones there, read one and compare.";
-    }
-
-    /// <summary>The folder and each folder above it, up to the project root.</summary>
-    private IEnumerable<string> FoldersFrom(string folder)
-    {
-        for (var current = folder; current is not null && Project.Contains(current); current = Path.GetDirectoryName(current))
-            yield return current;
-    }
 
     private static int CountOccurrences(string content, string text)
     {

@@ -221,7 +221,7 @@ public class InsertLinesToolTests
     {
         var error = Assert.ThrowsAsync<ToolException>(() => Run("x", "y", path: "Nope.cs"));
 
-        Assert.That(error!.Message, Does.StartWith("File not found").And.Contain("edit_file with an empty old_str"));
+        Assert.That(error!.Message, Does.StartWith("File not found").And.Contain("use write_file"));
     }
 
     [TestCase("", "x")]
