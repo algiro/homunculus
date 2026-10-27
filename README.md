@@ -101,6 +101,7 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_ALLOWED_PROGRAMS` | `dotnet,git`; the programs `run_command` may start under the approval mode. Any other program asks you every time. `none` allows none |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
 | `HOMUNCULUS_SHELL` | detected: PowerShell 7, else Windows PowerShell, else `cmd.exe` on Windows, `sh` elsewhere; set `pwsh`, `powershell`, `cmd` or `sh` to force one |
+| `HOMUNCULUS_REASONING_EFFORT` | not sent; `none`, `low`, `medium` or `high` is sent as `reasoning_effort` to both models. `none` turns thinking off on servers that support it (Ollama does), which makes small reasoning models much faster |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
 
@@ -142,7 +143,7 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `run_command` | Starts one program with a list of arguments, such as `{"program":"dotnet","args":["test"]}`, in the project folder and returns its output and exit code. No shell is involved, so `;`, `|`, `&&`, `$(...)` and redirects are plain text to the program. The program is looked up on `PATH` only, never in the project folder; on Windows only `.exe` and `.com` files run. Stops after the timeout. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
-Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened.
+Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened. If the model repeats the exact same failing call, it is told so the second time, and the third time the turn stops with a message instead of looping.
 
 ## Approvals
 

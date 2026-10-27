@@ -5,7 +5,7 @@ using Homunculus.Logging;
 namespace Homunculus.Llm;
 
 /// <summary>Talks to any OpenAI-compatible /chat/completions endpoint.</summary>
-public sealed class OpenAiModel(HttpClient http, string model, IEventLog? log = null) : ILanguageModel
+public sealed class OpenAiModel(HttpClient http, string model, IEventLog? log = null, string? reasoningEffort = null) : ILanguageModel
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
 
@@ -23,7 +23,7 @@ public sealed class OpenAiModel(HttpClient http, string model, IEventLog? log = 
         IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation)
     {
-        var request = OpenAiJson.BuildRequest(model, conversation, tools);
+        var request = OpenAiJson.BuildRequest(model, conversation, tools, reasoningEffort);
 
         _log.Write("llm_request", new { model, messages = conversation.Messages.Count, tools = tools.Count, requestChars = request.Length });
 

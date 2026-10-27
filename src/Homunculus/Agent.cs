@@ -35,6 +35,7 @@ public sealed class Agent(
         TokenUsage? used = null;
         var toolCalls = 0;
         void Summarise() => ui.ShowTurnSummary(new TurnSummary(modelName, used, toolCalls, Stopwatch.GetElapsedTime(started)));
+        runner.ForgetFailures();
 
         while (budget.TryTakeTurn(planned))
         {
@@ -89,6 +90,13 @@ public sealed class Agent(
                 planned |= call.Name == PlanTool.ToolName;
                 toolCalls++;
                 conversation.Add(Message.ToolResult(call.Id, await runner.RunAsync(call, cancellation)));
+            }
+
+            if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
+            {
+                _log.Write("turn_end", new { reason = "stuck", tool = stuck.Name });
+                ui.Show($"Stopped: the model made the same failing {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times. Tell it what to do differently.");
+                return;
             }
         }
 
