@@ -19,7 +19,7 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
         if (tool is null)
         {
             _log.Write("tool_unknown", new { call.Id, call.Name });
-            return $"Error: unknown tool '{call.Name}'.";
+            return ShowFailure($"unknown tool '{call.Name}'.");
         }
 
         ui.Show($"  -> {call.Name} {call.Arguments.GetRawText()}");
@@ -34,10 +34,18 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
         }
         catch (Exception e) when (e is ToolException or IOException or UnauthorizedAccessException)
         {
-            result = $"Error: {e.Message}";
+            result = ShowFailure(e.Message);
         }
 
         _log.Write("tool_result", new { call.Id, call.Name, result = JsonlEventLog.Truncate(result) });
         return result;
+    }
+
+    /// <summary>The model reads the failure as the tool's result; the user sees it too, so a later claim of success can be checked.</summary>
+    private string ShowFailure(string message)
+    {
+        var failure = $"Error: {message}";
+        ui.Show($"  <- {failure}");
+        return failure;
     }
 }

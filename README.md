@@ -141,7 +141,7 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
-Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text.
+Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened.
 
 ## Approvals
 
