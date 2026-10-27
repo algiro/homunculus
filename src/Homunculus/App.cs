@@ -13,16 +13,19 @@ public sealed class App
         $"You are a coding agent working in the project directory {project.Root}. Use paths relative to it " +
         "(for example '.' is the project root); reaching anything outside it needs the user's approval each time. " +
         "Use the tools to inspect and change files and to run commands. List a directory before reading files in it, " +
-        "read a file before editing it, and keep answers short. When you run tests or a build, make sure they use your latest edits.";
+        "read a file before editing it, and keep answers short. When you run tests or a build, make sure they use your latest edits. " +
+        "Before you implement an interface, read it and one existing implementation. If your new code does not compile, fix your own code: " +
+        "never change or delete existing files or types to make it compile.";
 
     public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
     {
+        Changes = new ChangedFiles(project);
         Tools = new ToolRegistry(
         [
             new ListFilesTool(project),
             new ReadFileTool(project),
-            new EditFileTool(project),
-            new DeleteFileTool(project),
+            new EditFileTool(project, Changes),
+            new DeleteFileTool(project, Changes),
             new RunCommandTool(project, settings.CommandTimeout, settings.Shell),
             new PlanTool(Plan),
         ], settings.EnabledTools);
@@ -33,10 +36,10 @@ public sealed class App
             ["effect"] = new FixedPolicy(Verdict.Ask),
             ["allow-all"] = new FixedPolicy(Verdict.Allow),
         });
-        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project);
+        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, Changes);
 
         Runner = new ToolRunner(Tools, approvals, ui, log);
-        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
+        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log, Changes);
 
         var commands = new CommandRegistry();
         commands
@@ -51,6 +54,7 @@ public sealed class App
     }
 
     public UsageLedger Usage { get; } = new();
+    public ChangedFiles Changes { get; }
     public TimeLedger Time { get; } = new();
     public Plan Plan { get; } = new();
     public ToolRegistry Tools { get; }

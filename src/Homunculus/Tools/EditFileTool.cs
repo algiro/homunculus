@@ -3,11 +3,11 @@ using System.Text.Json.Nodes;
 
 namespace Homunculus.Tools;
 
-public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
+public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes = null) : FileTool(project)
 {
     public override string Name => "edit_file";
     public override string Description =>
-        "Replace the single exact occurrence of old_str with new_str in a file. " +
+        "Replace the single exact occurrence of old_str with new_str in a file; to add something, keep the old text in new_str too. " +
         "With an empty old_str, create a new file containing new_str.";
     public override JsonObject Parameters => Schema.Of(
         Parameter.Required("path", "File to edit or create."),
@@ -37,14 +37,27 @@ public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
         if (matches > 1)
             throw new ToolException($"old_str matches {matches} places; add more context so it matches exactly once.");
 
-        File.WriteAllText(path, content.Replace(oldText, newText, StringComparison.Ordinal));
-        return $"Edited {path}";
+        var edited = content.Replace(oldText, newText, StringComparison.Ordinal);
+        File.WriteAllText(path, edited);
+        changes?.Edited(path);
+        return $"Edited {path}{RemovedNames(oldText, edited)}";
+    }
+
+    /// <summary>A model that meant to add a line but replaced one loses the names that were on it; say so, since it may not notice.</summary>
+    private static string RemovedNames(string oldText, string editedContent)
+    {
+        var stillThere = Identifiers.In(editedContent);
+        var gone = Identifiers.In(oldText).Where(name => !stillThere.Contains(name)).Order(StringComparer.Ordinal).Take(5).ToArray();
+        return gone.Length == 0
+            ? ""
+            : $". Warning: {string.Join(", ", gone)} no longer appear{(gone.Length == 1 ? "s" : "")} in this file; " +
+              "if you meant to add something, edit again and keep the old text in new_str.";
     }
 
     private static string NotFound(string content, string oldText)
     {
         var message = "old_str was not found in the file. Read the file again and copy the text exactly, including indentation; " +
-                      "prefer one short line that appears only once. If the file is beyond repair, delete it and create it again.";
+                      "prefer one short line that appears only once.";
         if (LooksDoubleEscaped(oldText))
             message += " " + EscapedLineBreaks("old_str");
         if (ClosestLine.Find(content, oldText) is { } mismatch)
@@ -52,6 +65,11 @@ public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
             message += $" Line {mismatch.QuotedNumber} of old_str is not in the file: {mismatch.QuotedText}";
             if (mismatch.ClosestNumber is { } number)
                 message += $" The closest line in the file is line {number}: {mismatch.ClosestText}";
+        }
+        else if (ClosestLine.EveryLineExists(content, oldText))
+        {
+            message += " Every line of old_str is in the file, but not together as one block: the order, the indentation " +
+                       "or the blank lines between them differ. Use just one of those lines as old_str.";
         }
 
         return message;
@@ -72,13 +90,14 @@ public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
 
     private static string WithWindowsLineEndings(string text) => text.Replace("\r\n", "\n").Replace("\n", "\r\n");
 
-    private static string Create(string path, string content)
+    private string Create(string path, string content)
     {
         if (File.Exists(path))
             throw new ToolException($"File already exists: {path}. Use a non-empty old_str to edit it.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+        changes?.Created(path);
         return $"Created {path}";
     }
 
