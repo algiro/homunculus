@@ -133,4 +133,27 @@ public class DependencyReminderTests
 
         Assert.That(result, Does.Not.Contain("not read").And.Not.Contain("have not"));
     }
+
+    [Test]
+    public async Task IgnoresFilesOfAnotherKindThatShareANameWithTheNamespace()
+    {
+        _project.Write("Homunculus.csproj", "<Project />");
+        _project.Write("Homunculus.slnx", "<Solution />");
+
+        var result = await Create("Commands/New.cs", "namespace Homunculus.Commands;\n\npublic sealed class New : ICommand {}");
+
+        Assert.That(result, Does.Contain("It uses ICommand, defined in Commands/ICommand.cs, which you have not read")
+            .And.Not.Contain("csproj").And.Not.Contain("slnx"));
+    }
+
+    [Test]
+    public async Task ListsANameOnceEvenWhenTwoFilesCarryIt()
+    {
+        _project.Write("Plan.cs", "class Plan {}");
+        _project.Write("Commands/Plan.cs", "class Plan {}");
+
+        var result = await Create("Commands/New.cs", "class New(Plan plan) {}");
+
+        Assert.That(result, Does.Contain("It uses Plan, defined in Commands/Plan.cs, Plan.cs, which you have not read"));
+    }
 }
