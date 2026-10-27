@@ -38,12 +38,34 @@ public class ApprovalsTests
     }
 
     [Test]
-    public async Task RefusesADeniedCallWithoutAsking()
+    public async Task PutsADeniedCallToTheUserAndRefusesItWhenTheUserAgrees()
     {
         PolicyAnswers(Verdict.Deny);
+        _ui.Answers('n');
 
-        Assert.That(await Check(Tool), Is.EqualTo("Denied by the policy."));
-        Assert.That(_ui.Questions, Is.Empty);
+        Assert.That(await Check(Tool), Is.EqualTo("Refused by the user."));
+        Assert.That(_ui.Questions.Single(), Does.StartWith("The policy would deny").And.Contain(Tool.Name));
+    }
+
+    [Test]
+    public async Task LetsTheUserOverruleADenial()
+    {
+        PolicyAnswers(Verdict.Deny);
+        _ui.Answers('y');
+
+        Assert.That(await Check(Tool), Is.Null);
+    }
+
+    [Test]
+    public async Task DoesNotRememberOverrulingADenial()
+    {
+        PolicyAnswers(Verdict.Deny);
+        _ui.Answers('y', 'n');
+
+        await Check(Tool);
+
+        Assert.That(await Check(Tool), Is.EqualTo("Refused by the user."));
+        Assert.That(_ui.Questions, Has.Count.EqualTo(2));
     }
 
     [Test]
