@@ -139,16 +139,18 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 |---|---|
 | `list_files` | Lists a directory (at most 200 entries); directories end with `/`. |
 | `read_file` | Reads a text file (at most 100,000 characters). |
-| `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. |
-| `delete_file` | Deletes a file. Directories are refused. |
-| `run_command` | Starts one program with a list of arguments, such as `{"program":"dotnet","args":["test"]}`, in the project folder and returns its output and exit code. No shell is involved, so `;`, `|`, `&&`, `$(...)` and redirects are plain text to the program. The program is looked up on `PATH` only, never in the project folder; on Windows only `.exe` and `.com` files run. Stops after the timeout. |
+| `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. |
+| `delete_file` | Deletes a file. Directories are refused. Deleting a file the agent did not create itself in this session is always put to you first. |
+| `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
 Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened. If the model repeats the exact same failing or refused call, it is told so the second time, and the third time the turn stops with a message instead of looping. A refusal also tells the model not to retry it or work around it.
 
+At the end of every message that changed files, the files are listed (`created`, `edited`, `deleted`) so a change the agent should not have made is easy to spot.
+
 ## Approvals
 
-- **Inside the project**, reads and writes run freely.
+- **Inside the project**, reads and writes run freely. Deleting a file the agent did not create itself in this session is the exception: it is put to you first, in every mode, and each deletion needs its own `y`.
 - **Outside the project**, any file read or write is always put to you first, in every mode, and each access needs its own `y`.
 - **A program that is not allowed** (anything but `HOMUNCULUS_ALLOWED_PROGRAMS`, by default `dotnet` and `git`) is always put to you first, in every mode, and each run needs its own `y`. This is what stops text the model read (a README, a comment, an issue) from getting it to run `curl`, a shell or a script on its own.
 - **Commands with an allowed program** follow the mode set with `/policy`, which the prompt always shows:

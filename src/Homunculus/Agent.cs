@@ -15,6 +15,7 @@ public sealed class Agent(
     bool showReasoning,
     IUserInterface ui,
     IEventLog? log = null,
+    ChangedFiles? changes = null,
     string? modelName = null)
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
@@ -24,6 +25,20 @@ public sealed class Agent(
     public void ClearConversation() => conversation.Clear();
 
     public async Task RespondAsync(string input, CancellationToken cancellation)
+    {
+        changes?.StartTurn();
+        try
+        {
+            await RunTurnAsync(input, cancellation);
+        }
+        finally
+        {
+            // However the turn ended, the user sees which files it touched.
+            if (changes?.Summary() is { } summary) ui.Show(summary);
+        }
+    }
+
+    private async Task RunTurnAsync(string input, CancellationToken cancellation)
     {
         conversation.Add(Message.User(input));
         _log.Write("turn_start", new { input });

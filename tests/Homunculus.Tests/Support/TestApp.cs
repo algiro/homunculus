@@ -24,6 +24,7 @@ public sealed class TestApp : IDisposable
     public FakeUserInterface Ui { get; }
     public UsageLedger Usage => _app.Usage;
     public Plan Plan => _app.Plan;
+    public ChangedFiles Changes => _app.Changes;
     public ToolRegistry Tools => _app.Tools;
     public SwitchablePolicy Policy => _app.Policy;
     public ToolRunner Runner => _app.Runner;

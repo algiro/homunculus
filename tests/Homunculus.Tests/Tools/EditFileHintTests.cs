@@ -103,12 +103,12 @@ public class EditFileHintTests
     }
 
     [Test]
-    public void SuggestsDeletingAndRecreatingAFileThatCannotBeFixed()
+    public void DoesNotSuggestDeletingTheFile()
     {
         _project.Write("A.cs", "x");
 
         var error = Assert.ThrowsAsync<ToolException>(() => Run("A.cs", "y", "z"));
 
-        Assert.That(error!.Message, Does.Contain("delete it and create it again"));
+        Assert.That(error!.Message, Does.Not.Contain("delete"));
     }
 }

@@ -68,4 +68,16 @@ public class ClosestLineTests
         Assert.That(found.QuotedText, Has.Length.EqualTo(203).And.EndsWith("..."));
         Assert.That(found.ClosestNumber, Is.Null, "the long word is not a word of the file");
     }
+
+    [Test]
+    public void EveryLineExistsWhenEachQuotedLineIsInTheFileOnItsOwn() =>
+        Assert.That(ClosestLine.EveryLineExists(Source, "    .Add(new ExitCommand());\ncommands"), Is.True);
+
+    [Test]
+    public void EveryLineExistsIsFalseWhenOneIsMissing() =>
+        Assert.That(ClosestLine.EveryLineExists(Source, "commands\nnot_there()"), Is.False);
+
+    [Test]
+    public void EveryLineExistsIsFalseForAQuoteWithoutWords() =>
+        Assert.That(ClosestLine.EveryLineExists(Source, "  {};\n"), Is.False);
 }
