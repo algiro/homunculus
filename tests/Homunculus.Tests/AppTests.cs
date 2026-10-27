@@ -271,7 +271,54 @@ public class AppTests
         await _app.Repl.RunAsync();
 
         Assert.That(_app.Ui.AllOutput, Does.Contain("/help").And.Contain("/tools").And.Contain("/usage").And.Contain("/policy [mode]")
-            .And.Contain("/clear").And.Contain("/exit").And.Contain("ctrl-c"));
+            .And.Contain("/plan").And.Contain("/clear").And.Contain("/exit").And.Contain("ctrl-c"));
+    }
+
+    [Test]
+    public async Task PlanSaysSoWhenThereIsNone()
+    {
+        _app = new TestApp(new ScriptedModel());
+        _app.Ui.TypesLines("/plan");
+
+        await _app.Repl.RunAsync();
+
+        Assert.That(_app.Ui.Output[^1], Is.EqualTo("No plan yet."));
+    }
+
+    [Test]
+    public async Task PlanShowsWhatTheModelRecorded()
+    {
+        var model = new ScriptedModel(Replies.Tool("plan", """{"steps":["[x] read","[ ] edit"]}"""), Replies.Text("done"));
+        _app = new TestApp(model);
+        _app.Ui.TypesLines("go", "/plan");
+
+        await _app.Repl.RunAsync();
+
+        Assert.That(_app.Ui.Output[^1], Is.EqualTo("1. [x] read\n2. [ ] edit"));
+    }
+
+    [Test]
+    public async Task ClearForgetsThePlanToo()
+    {
+        var model = new ScriptedModel(Replies.Tool("plan", """{"steps":["a"]}"""), Replies.Text("done"));
+        _app = new TestApp(model);
+        _app.Ui.TypesLines("go", "/clear", "/plan");
+
+        await _app.Repl.RunAsync();
+
+        Assert.That(_app.Ui.Output[^1], Is.EqualTo("No plan yet."));
+    }
+
+    [Test]
+    public async Task TellsTheModelWhichShellRunsItsCommands()
+    {
+        var model = new ScriptedModel(Replies.Text("hi"));
+        _app = new TestApp(model);
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        var description = model.ToolLists[0].Single(tool => tool.Name == "run_command").Description;
+        Assert.That(description, Does.Contain(OperatingSystem.IsWindows() ? "cmd.exe" : "sh"));
     }
 
     [Test]

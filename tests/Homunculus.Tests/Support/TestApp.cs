@@ -23,6 +23,7 @@ public sealed class TestApp : IDisposable
     public TempProject Project { get; }
     public FakeUserInterface Ui { get; }
     public UsageLedger Usage => _app.Usage;
+    public Plan Plan => _app.Plan;
     public ToolRegistry Tools => _app.Tools;
     public SwitchablePolicy Policy => _app.Policy;
     public ToolRunner Runner => _app.Runner;

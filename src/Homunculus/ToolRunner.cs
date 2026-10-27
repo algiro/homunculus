@@ -40,6 +40,8 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
                 started = Stopwatch.GetTimestamp();
                 using (ui.ShowProgress("running"))
                     result = await tool.RunAsync(call.Arguments, cancellation);
+                if (tool.EffectOf(call.Arguments).Access == ToolAccess.Plan && result.Length > 0)
+                    ui.Show(result);
             }
             else
             {
