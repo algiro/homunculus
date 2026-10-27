@@ -15,7 +15,8 @@ public sealed record Settings(
     IReadOnlyList<string>? AllowedPrograms = null,
     Shell? Shell = null,
     string? ReasoningEffort = null,
-    string? JudgeReasoningEffort = null)
+    string? JudgeReasoningEffort = null,
+    string? CheckCommand = null)
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
 
@@ -64,6 +65,7 @@ public sealed record Settings(
                 ? Shell.Named(shell) ?? throw new InvalidOperationException($"HOMUNCULUS_SHELL must be {Shell.Choices}, not '{shell}'.")
                 : null,
             Effort("HOMUNCULUS_REASONING_EFFORT"),
-            Effort("HOMUNCULUS_JUDGE_REASONING_EFFORT"));
+            Effort("HOMUNCULUS_JUDGE_REASONING_EFFORT"),
+            Env("HOMUNCULUS_CHECK_COMMAND"));
     }
 }
