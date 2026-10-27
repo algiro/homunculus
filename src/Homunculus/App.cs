@@ -14,6 +14,7 @@ public sealed class App
         "(for example '.' is the project root); reaching anything outside it needs the user's approval each time. " +
         "Use the tools to inspect and change files and to run commands. List a directory before reading files in it, " +
         "and search with grep and glob to find where something is defined or used instead of guessing a path, " +
+        "and use insert_lines, not a rewritten block, to add a line next to an existing one (for example to register something), " +
         "read a file before editing it, and keep answers short. When you run tests or a build, make sure they use your latest edits. " +
         "Before you implement an interface, read it and one existing implementation. If your new code does not compile, fix your own code: " +
         "never change or delete existing files or types to make it compile.";
@@ -29,6 +30,7 @@ public sealed class App
             new GrepTool(project),
             new ReadFileTool(project, Reads),
             new EditFileTool(project, Changes, Reads),
+            new InsertLinesTool(project, Changes),
             new DeleteFileTool(project, Changes),
             new RunCommandTool(project, settings.CommandTimeout, settings.Shell),
             new PlanTool(Plan),

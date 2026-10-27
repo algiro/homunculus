@@ -4,7 +4,7 @@
 
 # homunculus
 
-A tiny coding agent in plain .NET 10: a loop, eight tools, and a language model. No AI libraries, no NuGet packages in the app.
+A tiny coding agent in plain .NET 10: a loop, nine tools, and a language model. No AI libraries, no NuGet packages in the app.
 
 > The name comes from the medieval alchemists' *homunculus*: a tiny artificial person brewed in a flask that does the work it is given. Here the flask is a language model and the little helper is a loop with six tools.
 
@@ -15,7 +15,7 @@ Inspired by [konacode](https://github.com/bbossola/konacode).
 ## What it does today
 
 - **Agent loop:** sends the conversation to the model, runs the tools it asks for, and repeats until the model answers with text.
-- **Eight tools:** list, find (`glob`), search (`grep`), read, edit and delete files, run a shell command, and record a plan ([details](#tools)).
+- **Nine tools:** list, find (`glob`), search (`grep`), read, edit, insert into and delete files, run a shell command, and record a plan ([details](#tools)).
 - **Any OpenAI-compatible server:** OpenAI itself, or a local model through Ollama and similar ([example](#using-a-local-model)).
 - **Approvals:** file access outside the project folder always asks you; commands follow a selectable mode, including a second "judge" model ([details](#approvals)).
 - **Reasoning:** the thinking that reasoning models report is shown in gray with a `[thinking]` prefix on every line (can be turned off).
@@ -140,7 +140,8 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `glob` | Finds files by name pattern (`**/*.cs`, `src/**/Version*.cs`, `*.{cs,csproj}`); a pattern without `/` matches in any folder. At most 200 results; skips `bin`, `obj`, `.git`, `.vs`, `.idea` and `node_modules`. |
 | `grep` | Searches file contents with a regular expression and returns `file:line: text` (at most 200). Optional `path` (a folder or a file) and `include` (a name pattern such as `*.cs`). Skips the same folders plus logs (`*.log`, `*.jsonl`, `logs/`) and binary or very large files. |
 | `read_file` | Reads a text file (at most 100,000 characters). Given a directory, it says to use `list_files`. |
-| `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. Pointing it at a directory says so too, and a new file gets a reminder to read the files it builds on first: the unread files named after a name its code uses (`ICommand` for `: ICommand`) in its folder or above, else any unread neighbour. |
+| `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. Pointing it at a directory says so too, and a new file gets a reminder to read the files it builds on first: the unread files of the same kind (same extension) named after a name its code uses (`ICommand` for `: ICommand`) in its folder or above, else any unread neighbour. |
+| `insert_lines` | Inserts lines before or after an existing line (`line`; `position` is `after` by default), for example to register something next to its siblings. The line is matched ignoring indentation, the new lines take its indentation, the file's line endings are kept, and the result shows the lines around the insertion. An anchor that is not in the file gets the closest real line; one that matches several lines gets their numbers. |
 | `delete_file` | Deletes a file. Directories are refused. Deleting a file the agent did not create itself in this session is always put to you first. |
 | `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
@@ -187,7 +188,7 @@ The file contains your prompts and file contents, so keep it private (`*.jsonl` 
 - `Agent`: send the conversation, run the requested tools, repeat until the model answers with text; asks at the iteration limit.
 - `ToolRunner`: runs one tool call if approved and turns failures into text the model can read.
 - `Llm/`: `ILanguageModel`; `OpenAiModel` (HTTP) and `OpenAiJson` (wire format) implement it for OpenAI-compatible servers. `TimedModel` and `MeteredModel` are decorators that wrap any model to record the time and the tokens of each call.
-- `Tools/`: `ITool` and the eight tools. A tool describes what a call does with `ToolEffect`. A new tool is one class and one line in `App`.
+- `Tools/`: `ITool` and the nine tools. A tool describes what a call does with `ToolEffect`. A new tool is one class and one line in `App`.
 - `Policy/`: `ProjectBoundaryPolicy` lets file access inside the project run freely; `Approvals` asks you for anything outside it and whenever a policy is unsure; `SwitchablePolicy` holds the three command modes.
 - `Commands/`: one small `ICommand` class per slash command. A new command is one class and one line in `App`.
 - `Logging/`: `IEventLog` and the JSONL file writer behind the debug log.

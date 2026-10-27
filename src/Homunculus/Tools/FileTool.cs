@@ -21,6 +21,12 @@ public abstract class FileTool(ProjectDirectory project) : ITool
     /// <summary>The path as the model writes it: relative to the project, with forward slashes.</summary>
     protected string Relative(string fullPath) => Path.GetRelativePath(Project.Root, fullPath).Replace('\\', '/');
 
+    protected void RefuseDirectory(string path)
+    {
+        if (Directory.Exists(path))
+            throw new ToolException($"{Relative(path)} is a directory, not a file. Give the path of a file, for example {Relative(path)}/<file name>.");
+    }
+
     protected virtual string PathOf(JsonElement arguments) => Project.Resolve(arguments.Text("path"));
 
     protected abstract string Run(JsonElement arguments, string path);
