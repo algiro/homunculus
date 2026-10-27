@@ -10,8 +10,9 @@ namespace Homunculus;
 /// Runs one tool call the model asked for, if approved. Failures the model can act on (a tool's own complaint, a missing file,
 /// a locked or forbidden path) become text it can read. Anything else is a bug in a tool, so it is not hidden and propagates.
 /// It also notices a model that keeps repeating the same failing call: the second time it is told so, the third time the agent stops.
+/// When the user set a check, it runs after every successful change to a file and its verdict is added to the tool's result.
 /// </summary>
-public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInterface ui, IEventLog? log = null)
+public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInterface ui, IEventLog? log = null, ProjectCheck? check = null)
 {
     public const int StopAfterIdenticalFailures = 3;
 
@@ -45,6 +46,7 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
             if (refusal is null) _failures.Remove(KeyOf(call));
             if (refusal is null && tool.EffectOf(call.Arguments).Access == ToolAccess.Plan && result.Length > 0)
                 ui.Show(result);
+            if (refusal is null) result += await CheckAfterChangeAsync(tool, call, cancellation);
         }
         catch (Exception e) when (e is ToolException or IOException or UnauthorizedAccessException)
         {
@@ -53,6 +55,16 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
 
         _log.Write("tool_result", new { call.Id, call.Name, result = JsonlEventLog.Truncate(result) });
         return result;
+    }
+
+    private async Task<string> CheckAfterChangeAsync(ITool tool, ToolCall call, CancellationToken cancellation)
+    {
+        if (check is null || tool.EffectOf(call.Arguments).Access is not (ToolAccess.Write or ToolAccess.Delete)) return "";
+
+        var outcome = await check.RunAsync(cancellation);
+        ui.Show(outcome.Passed ? "  check: passed" : "  check: failed");
+        _log.Write("check", new { call.Id, outcome.Passed });
+        return "\n\n" + outcome.Report;
     }
 
     /// <summary>The model reads the failure as the tool's result; the user sees it too, so a later claim of success can be checked.</summary>

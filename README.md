@@ -102,6 +102,7 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_SHELL` | detected: PowerShell 7, else Windows PowerShell, else `cmd.exe` on Windows, `sh` elsewhere; set `pwsh`, `powershell`, `cmd` or `sh` to force one |
 | `HOMUNCULUS_REASONING_EFFORT` | not sent; `none`, `low`, `medium` or `high` is sent as `reasoning_effort` to the agent model. `none` turns thinking off on servers that support it (Ollama does), which makes small reasoning models much faster |
 | `HOMUNCULUS_JUDGE_REASONING_EFFORT` | not sent; the same for the judge model. Leave it unset for small models: without thinking they tend to answer `deny` to routine commands such as `dotnet test` |
+| `HOMUNCULUS_CHECK_COMMAND` | none; a command line such as `dotnet build --no-restore -v q` that proves the project still works. It runs after every change to a file (create, edit, insert, delete) and its verdict is added to the tool result: `Check passed.`, or the first error lines (paths start at the project) when it fails. The agent model then fixes mistakes at once. Runs with the same shell and time limit as `run_command`; you see `check: passed` or `check: failed` on screen |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
 
@@ -141,7 +142,7 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `grep` | Searches file contents with a regular expression and returns `file:line: text` (at most 200). Optional `path` (a folder or a file) and `include` (a name pattern such as `*.cs`). Skips the same folders plus logs (`*.log`, `*.jsonl`, `logs/`) and binary or very large files. |
 | `read_file` | Reads a text file (at most 100,000 characters). Given a directory, it says to use `list_files`. |
 | `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. Pointing it at a directory says so too, and a new file gets a reminder to read the files it builds on first: the unread files of the same kind (same extension) named after a name its code uses (`ICommand` for `: ICommand`) in its folder or above, else any unread neighbour. |
-| `insert_lines` | Inserts lines before or after an existing line (`line`; `position` is `after` by default), for example to register something next to its siblings. The line is matched ignoring indentation, the new lines take its indentation, the file's line endings are kept, and the result shows the lines around the insertion. An anchor that is not in the file gets the closest real line; one that matches several lines gets their numbers. |
+| `insert_lines` | Inserts lines before or after an existing line (`line`; `position` is `after` by default), for example to register something next to its siblings. The line is matched ignoring indentation, the new lines take its indentation, the file's line endings are kept, and the result shows the lines around the insertion. An anchor can also be several consecutive lines (the text goes after the last one, or before the first). An anchor that is not in the file gets the closest real line; one that matches several places gets their line numbers. |
 | `delete_file` | Deletes a file. Directories are refused. Deleting a file the agent did not create itself in this session is always put to you first. |
 | `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
@@ -178,6 +179,7 @@ HOMUNCULUS_LOG_FILE=logs/homunculus.jsonl
 | `reply` | What was parsed: reasoning, content, tool-call names, token usage and milliseconds. |
 | `nudge`, `iteration_limit` | The reminder for an empty reply; the moment the limit asked you. |
 | `tool_call`, `tool_result` | Name and arguments; the result (truncated to 4000 characters). |
+| `check` | Whether the check command passed after a change (only with `HOMUNCULUS_CHECK_COMMAND`). |
 
 The file contains your prompts and file contents, so keep it private (`*.jsonl` is git-ignored). The API key is never logged.
 

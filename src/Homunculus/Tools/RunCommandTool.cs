@@ -1,73 +1,27 @@
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Homunculus.Tools;
 
-public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout, Shell? shell = null) : ITool
+public sealed class RunCommandTool(ICommandRunner runner) : ITool
 {
-    private readonly Shell _shell = shell ?? Shell.Detect();
+    public RunCommandTool(ProjectDirectory project, TimeSpan timeout, Shell? shell = null)
+        : this(new CommandRunner(project, timeout, shell))
+    {
+    }
 
     public string Name => "run_command";
     public string Description =>
-        $"Run a command line with {_shell.Name} in the project directory ({RuntimeInformation.OSDescription}) " +
-        $"and return its output and exit code. Use only syntax that {_shell.Name} understands.";
+        $"Run a command line with {runner.Shell.Name} in the project directory ({RuntimeInformation.OSDescription}) " +
+        $"and return its output and exit code. Use only syntax that {runner.Shell.Name} understands.";
     public JsonObject Parameters => Schema.Of(Parameter.Required("command", "The command line to run."));
 
     public ToolEffect EffectOf(JsonElement arguments) => ToolEffect.Running;
 
     public async Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation)
     {
-        using var process = Start(arguments.Text("command"));
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        limit.CancelAfter(timeout);
-
-        var output = new StringBuilder();
-        process.OutputDataReceived += (_, e) => Append(output, e.Data);
-        process.ErrorDataReceived += (_, e) => Append(output, e.Data);
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        try
-        {
-            await process.WaitForExitAsync(limit.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            cancellation.ThrowIfCancellationRequested();
-            throw new ToolException($"Command timed out after {timeout.TotalSeconds:0} seconds.");
-        }
-
-        return $"{output}\n[exit code {process.ExitCode}]".Truncate(Limits.OutputChars);
-    }
-
-    private Process Start(string command)
-    {
-        var info = new ProcessStartInfo(_shell.Executable)
-        {
-            WorkingDirectory = project.Root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var argument in _shell.Arguments) info.ArgumentList.Add(argument);
-        info.ArgumentList.Add(command);
-        try
-        {
-            return Process.Start(info)!;
-        }
-        catch (Win32Exception e)
-        {
-            throw new ToolException($"Cannot start {_shell.Name}: {e.Message}");
-        }
-    }
-
-    private static void Append(StringBuilder output, string? line)
-    {
-        if (line is null) return;
-        lock (output) output.AppendLine(line);
+        var (output, exitCode) = await runner.RunAsync(arguments.Text("command"), cancellation);
+        return $"{output}\n[exit code {exitCode}]".Truncate(Limits.OutputChars);
     }
 }

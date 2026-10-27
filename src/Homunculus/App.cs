@@ -44,7 +44,10 @@ public sealed class App
         });
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, Changes);
 
-        Runner = new ToolRunner(Tools, approvals, ui, log);
+        var check = settings.CheckCommand is { } checkCommand
+            ? new ProjectCheck(checkCommand, new CommandRunner(project, settings.CommandTimeout, settings.Shell), project)
+            : null;
+        Runner = new ToolRunner(Tools, approvals, ui, log, check);
         Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log, Changes, Reads);
 
         var commands = new CommandRegistry();
