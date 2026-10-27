@@ -7,6 +7,8 @@ public sealed class ReadFiles
 
     public void Read(string path) => _read.Add(path);
 
+    public bool HasRead(string path) => _read.Contains(path);
+
     public bool HasReadAnyIn(string directory) => _read.Any(path => Path.GetDirectoryName(path) == directory);
 
     public void Forget() => _read.Clear();
