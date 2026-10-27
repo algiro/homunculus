@@ -15,6 +15,8 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
         Parameter.Required("new_str", "Replacement text."));
     protected override ToolAccess Access => ToolAccess.Write;
 
+    private const int MaxNamedFiles = 5;
+
     protected override string Run(JsonElement arguments, string path)
     {
         var oldText = arguments.Text("old_str");
@@ -101,17 +103,42 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         changes?.Created(path);
-        return $"Created {path}{UnreadNeighboursNote(path)}";
+        return $"Created {path}{UnreadFilesNote(path, content)}";
     }
 
-    /// <summary>A new file that should follow its neighbours is better written after looking at one of them.</summary>
-    private string UnreadNeighboursNote(string path)
+    /// <summary>
+    /// A new file is better written after looking at what it builds on. First choice: files named after a name the new code
+    /// uses (ICommand for ": ICommand"), found in its folder or above it, that the model has not read. Failing that, any
+    /// neighbour at all.
+    /// </summary>
+    private string UnreadFilesNote(string path, string content)
     {
+        if (reads is null) return "";
+
         var folder = Path.GetDirectoryName(path)!;
+        var used = Identifiers.In(content);
+        var unread = FoldersFrom(folder)
+            .SelectMany(Directory.EnumerateFiles)
+            .Where(other => other != path && used.Contains(Path.GetFileNameWithoutExtension(other)) && !reads.HasRead(other))
+            .Distinct().Order(StringComparer.Ordinal).Take(MaxNamedFiles).ToArray();
+        if (unread.Length > 0)
+        {
+            var names = string.Join(", ", unread.Select(Path.GetFileNameWithoutExtension));
+            var files = string.Join(", ", unread.Select(Relative));
+            return $". It uses {names}, defined in {files}, which you have not read. Read them and check that this file matches.";
+        }
+
         var hasNeighbours = Directory.EnumerateFiles(folder).Any(other => other != path);
-        return reads is null || !hasNeighbours || reads.HasReadAnyIn(folder)
+        return !hasNeighbours || reads.HasReadAnyIn(folder)
             ? ""
             : $". You have not read any other file in {Relative(folder)} yet; if this file should follow the ones there, read one and compare.";
+    }
+
+    /// <summary>The folder and each folder above it, up to the project root.</summary>
+    private IEnumerable<string> FoldersFrom(string folder)
+    {
+        for (var current = folder; current is not null && Project.Contains(current); current = Path.GetDirectoryName(current))
+            yield return current;
     }
 
     private static int CountOccurrences(string content, string text)
