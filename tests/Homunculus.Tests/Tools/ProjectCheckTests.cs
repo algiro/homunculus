@@ -174,4 +174,89 @@ public class ProjectCheckTests
 
         Assert.That(result.Errors, Is.Empty);
     }
+
+    [Test]
+    public async Task KeepsTheIndentedLinesUnderAnErrorSoATracebackShowsItsLineNumber()
+    {
+        Prints("*** Error compiling './main.py'...\n  File \"./main.py\", line 1\n    def broken(:\n               ^\nSyntaxError: invalid syntax\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Report, Does.Contain("*** Error compiling './main.py'...\n  File \"./main.py\", line 1\n    def broken(:\n               ^\nSyntaxError: invalid syntax"));
+        Assert.That(result.Errors[0].Context, Has.Count.EqualTo(3));
+        Assert.That(result.Errors[0].Line, Is.EqualTo("*** Error compiling './main.py'..."));
+    }
+
+    [Test]
+    public async Task KeepsAtMostThreeLinesOfContext()
+    {
+        Prints("main.c:4:5: error: oops\n  one\n  two\n  three\n  four\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors[0].Context, Is.EqualTo(new[] { "  one", "  two", "  three" }));
+    }
+
+    [Test]
+    public async Task StopsTheContextAtTheNextErrorAndAtABuildsTotals()
+    {
+        Prints("a.c:1:1: error: first\n  excerpt\nb.c:2:2: error: second\n    1 Error(s)\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors.Select(error => error.Display), Is.EqualTo(new[] { "a.c:1:1: error: first\n  excerpt", "b.c:2:2: error: second" }));
+    }
+
+    [Test]
+    public async Task ShowsAnErrorThatIsPrintedTwiceWithItsContextOnce()
+    {
+        Prints("a.c:1:1: error: first\n  excerpt\na.c:1:1: error: first\n  excerpt\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ComparesErrorsByTheirLineAloneNotByTheirContext()
+    {
+        Prints("a.c:1:1: error: first\n  excerpt one\n", 1);
+        var first = await _check.RunAsync(CancellationToken.None);
+        Prints("a.c:9:4: error: first\n  excerpt two\n", 1);
+        var second = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(second.Errors[0].Key, Is.EqualTo(first.Errors[0].Key));
+    }
+
+    [Test]
+    public async Task TakesACompilerLineThatPointsAtAFileAsAnErrorEvenWithoutTheWordError()
+    {
+        Prints("# example.com/demo\n./main.go:6:14: undefined: undefinedName\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors.Select(error => error.Line), Is.EqualTo(new[] { "./main.go:6:14: undefined: undefinedName" }));
+        Assert.That(result.Errors[0].Key, Is.EqualTo("./main.go: undefined: undefinedName"));
+        Assert.That(result.Report, Does.EndWith("./main.go:6:14: undefined: undefinedName"));
+    }
+
+    [Test]
+    public async Task DoesNotTakeAWarningThatPointsAtAFileForAnError()
+    {
+        Prints("main.c:3:5: warning: unused variable\nmain.c:9:1: error: expected ';'\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors.Select(error => error.Line), Is.EqualTo(new[] { "main.c:9:1: error: expected ';'" }));
+    }
+
+    [Test]
+    public async Task DoesNotTakeAnOrdinaryLineWithAColonForAnError()
+    {
+        Prints("Restoring packages: 3 of 5\nresult: done\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors, Is.Empty);
+    }
 }
