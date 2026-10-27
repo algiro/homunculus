@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 
 namespace Homunculus.Tools;
 
-public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes = null) : FileTool(project)
+public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes = null, ReadFiles? reads = null) : FileTool(project)
 {
     public override string Name => "edit_file";
     public override string Description =>
@@ -19,6 +19,9 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
     {
         var oldText = arguments.Text("old_str");
         var newText = arguments.Text("new_str");
+
+        if (Directory.Exists(path))
+            throw new ToolException($"{Relative(path)} is a directory, not a file. Give the path of a file, for example {Relative(path)}/<file name>.");
 
         if (LooksDoubleEscaped(newText) && (oldText.Length == 0 || oldText.Contains('\n')))
             throw new ToolException(EscapedLineBreaks("new_str"));
@@ -98,7 +101,17 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         changes?.Created(path);
-        return $"Created {path}";
+        return $"Created {path}{UnreadNeighboursNote(path)}";
+    }
+
+    /// <summary>A new file that should follow its neighbours is better written after looking at one of them.</summary>
+    private string UnreadNeighboursNote(string path)
+    {
+        var folder = Path.GetDirectoryName(path)!;
+        var hasNeighbours = Directory.EnumerateFiles(folder).Any(other => other != path);
+        return reads is null || !hasNeighbours || reads.HasReadAnyIn(folder)
+            ? ""
+            : $". You have not read any other file in {Relative(folder)} yet; if this file should follow the ones there, read one and compare.";
     }
 
     private static int CountOccurrences(string content, string text)
