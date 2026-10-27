@@ -4,7 +4,8 @@ using Homunculus.Tools;
 namespace Homunculus.Policy;
 
 /// <summary>
-/// Turns the policy's verdict into a decision, asking the user when the policy is unsure. Two kinds of call are always put to
+/// Turns the policy's verdict into a decision, asking the user when the policy is unsure or says no: a judge model can be
+/// wrong, so a denial is put to the user too, who may overrule it. Two kinds of call are always put to
 /// the user first, whatever the policy mode and whatever was approved before, and each one needs its own yes: any file access
 /// outside the project, and a command that starts a program which is not on the allowed list. An "always" answer for a command
 /// covers that exact command only (the same program with the same arguments); for any other tool it covers the tool.
@@ -31,7 +32,7 @@ public sealed class Approvals(IPolicy policy, IUserInterface ui, ProjectDirector
         return await policy.EvaluateAsync(tool, arguments, cancellation) switch
         {
             Verdict.Allow => null,
-            Verdict.Deny => "Denied by the policy.",
+            Verdict.Deny => ConfirmDenied(tool, arguments),
             _ => AskUser(tool, arguments, grant, effect.Access == ToolAccess.Command),
         };
     }
@@ -49,6 +50,12 @@ public sealed class Approvals(IPolicy policy, IUserInterface ui, ProjectDirector
     /// <summary>Never remembered and never decided by a policy: each run of a program off the list is the user's call.</summary>
     private string? ConfirmProgram(ITool tool, JsonElement arguments, string program, AllowedPrograms programs) =>
         ui.Choose($"{tool.Name} {arguments.GetRawText()} runs '{program}', which is NOT an allowed program ({programs.Describe()}). Allow?", "yn") == 'y'
+            ? null
+            : "Refused by the user.";
+
+    /// <summary>Never remembered: overruling the policy once does not overrule it for the next call.</summary>
+    private string? ConfirmDenied(ITool tool, JsonElement arguments) =>
+        ui.Choose($"The policy would deny {tool.Name} {arguments.GetRawText()}. Run it anyway?", "yn") == 'y'
             ? null
             : "Refused by the user.";
 

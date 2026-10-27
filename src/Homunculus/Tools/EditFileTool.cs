@@ -47,8 +47,13 @@ public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
                       "prefer one short line that appears only once. If the file is beyond repair, delete it and create it again.";
         if (LooksDoubleEscaped(oldText))
             message += " " + EscapedLineBreaks("old_str");
-        if (ClosestLine.Find(content, oldText) is var (number, text))
-            message += $" The closest line in the file is line {number}: {text}";
+        if (ClosestLine.Find(content, oldText) is { } mismatch)
+        {
+            message += $" Line {mismatch.QuotedNumber} of old_str is not in the file: {mismatch.QuotedText}";
+            if (mismatch.ClosestNumber is { } number)
+                message += $" The closest line in the file is line {number}: {mismatch.ClosestText}";
+        }
+
         return message;
     }
 

@@ -26,7 +26,7 @@ try
         new ConsoleUserInterface(),
         new ProjectDirectory(Directory.GetCurrentDirectory()),
         new OpenAiModel(http, settings.Model, log, settings.ReasoningEffort),
-        new OpenAiModel(http, settings.JudgeModel, log, settings.ReasoningEffort),
+        new OpenAiModel(http, settings.JudgeModel, log, settings.JudgeReasoningEffort),
         log);
 }
 catch (InvalidOperationException e)

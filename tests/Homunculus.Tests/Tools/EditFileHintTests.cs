@@ -76,7 +76,20 @@ public class EditFileHintTests
         var error = Assert.ThrowsAsync<ToolException>(() =>
             Run("App.cs", "registry.Register<PolicyCommand>();", "registry.Register<VersionCommand>();"));
 
-        Assert.That(error!.Message, Does.Contain("The closest line in the file is line 3: .Add(new PolicyCommand(Policy, ui))"));
+        Assert.That(error!.Message, Does.Contain("Line 1 of old_str is not in the file: registry.Register<PolicyCommand>();"));
+        Assert.That(error.Message, Does.Contain("The closest line in the file is line 3:     .Add(new PolicyCommand(Policy, ui))"));
+    }
+
+    [Test]
+    public void PointsAtTheWrongLineOfAMultiLineQuote()
+    {
+        _project.Write("App.cs", "commands\n    .Add(new HelpCommand(commands, ui))\n    .Add(new ToolsCommand(Tools, ui))\n");
+
+        var error = Assert.ThrowsAsync<ToolException>(() =>
+            Run("App.cs", "commands\n    .Add(new HelpCommand(commands, ui))\n    .Add(new ToolCommand(Tools, ui))", "x"));
+
+        Assert.That(error!.Message, Does.Contain("Line 3 of old_str is not in the file:     .Add(new ToolCommand(Tools, ui))"));
+        Assert.That(error.Message, Does.Contain("The closest line in the file is line 3:     .Add(new ToolsCommand(Tools, ui))"));
     }
 
     [Test]
