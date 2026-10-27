@@ -13,7 +13,7 @@ public sealed class App
         $"You are a coding agent working in the project directory {project.Root}. Use paths relative to it " +
         "(for example '.' is the project root); reaching anything outside it needs the user's approval each time. " +
         "Use the tools to inspect and change files and to run commands. List a directory before reading files in it, " +
-        "read a file before editing it, and keep answers short.";
+        "read a file before editing it, and keep answers short. When you run tests or a build, make sure they use your latest edits.";
 
     public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
     {
@@ -24,7 +24,7 @@ public sealed class App
             new EditFileTool(project),
             new DeleteFileTool(project),
             new RunCommandTool(project, settings.CommandTimeout),
-            new PlanTool(),
+            new PlanTool(Plan),
         ], settings.EnabledTools);
 
         Policy = new SwitchablePolicy(new Dictionary<string, IPolicy>
@@ -44,13 +44,15 @@ public sealed class App
             .Add(new ToolsCommand(Tools, ui))
             .Add(new PolicyCommand(Policy, ui))
             .Add(new UsageCommand(Usage, ui, Time))
-            .Add(new ClearCommand(Agent, ui))
+            .Add(new PlanCommand(Plan, ui))
+            .Add(new ClearCommand(Agent, Plan, ui))
             .Add(new ExitCommand());
         Repl = new Repl(Agent, commands, ui);
     }
 
     public UsageLedger Usage { get; } = new();
     public TimeLedger Time { get; } = new();
+    public Plan Plan { get; } = new();
     public ToolRegistry Tools { get; }
     public SwitchablePolicy Policy { get; }
     public ToolRunner Runner { get; }

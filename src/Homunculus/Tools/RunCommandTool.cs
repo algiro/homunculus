@@ -1,14 +1,19 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Homunculus.Tools;
 
-public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout) : ITool
+public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout, Shell? shell = null) : ITool
 {
+    private readonly Shell _shell = shell ?? Shell.Detect();
+
     public string Name => "run_command";
-    public string Description => "Run a shell command line in the project directory and return its output and exit code.";
+    public string Description =>
+        $"Run a command line with {_shell.Name} in the project directory ({RuntimeInformation.OSDescription}) " +
+        $"and return its output and exit code. Use only syntax that {_shell.Name} understands.";
     public JsonObject Parameters => Schema.Of(Parameter.Required("command", "The command line to run."));
 
     public ToolEffect EffectOf(JsonElement arguments) => ToolEffect.Running;
@@ -41,14 +46,13 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout) :
 
     private Process Start(string command)
     {
-        var (shell, runFlag) = OperatingSystem.IsWindows() ? ("cmd.exe", "/c") : ("/bin/sh", "-c");
-        var info = new ProcessStartInfo(shell)
+        var info = new ProcessStartInfo(_shell.Executable)
         {
             WorkingDirectory = project.Root,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        info.ArgumentList.Add(runFlag);
+        info.ArgumentList.Add(_shell.RunFlag);
         info.ArgumentList.Add(command);
         return Process.Start(info)!;
     }

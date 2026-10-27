@@ -36,6 +36,48 @@ public class ToolRunnerTests
     }
 
     [Test]
+    public async Task ShowsThePlanTheModelRecorded()
+    {
+        Start();
+
+        await Run("plan", """{"steps":["[x] read","[ ] edit"]}""");
+
+        Assert.That(_app.Ui.Output, Has.Count.EqualTo(2));
+        Assert.That(_app.Ui.Output[1], Is.EqualTo("1. [x] read\n2. [ ] edit"));
+    }
+
+    [Test]
+    public async Task DoesNotShowAnythingForAnEmptyPlan()
+    {
+        Start();
+
+        await Run("plan", """{"steps":[]}""");
+
+        Assert.That(_app.Ui.Output, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task DoesNotShowThePlanWhenTheCallFails()
+    {
+        Start();
+
+        await Run("plan", "{}");
+
+        Assert.That(_app.Ui.Output, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task DoesNotShowTheOutputOfOtherTools()
+    {
+        Start();
+        _app.Project.Write("a.txt", "secret content");
+
+        await Run("read_file", """{"path":"a.txt"}""");
+
+        Assert.That(_app.Ui.AllOutput, Does.Not.Contain("secret content"));
+    }
+
+    [Test]
     public async Task ReportsAnUnknownTool()
     {
         Start();

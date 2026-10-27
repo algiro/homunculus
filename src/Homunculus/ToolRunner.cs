@@ -29,6 +29,8 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
         {
             var refusal = await approvals.CheckAsync(tool, call.Arguments, cancellation);
             result = refusal ?? await tool.RunAsync(call.Arguments, cancellation);
+            if (refusal is null && tool.EffectOf(call.Arguments).Access == ToolAccess.Plan && result.Length > 0)
+                ui.Show(result);
         }
         catch (Exception e) when (e is ToolException or IOException or UnauthorizedAccessException)
         {
