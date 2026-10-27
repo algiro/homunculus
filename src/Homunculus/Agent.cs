@@ -29,6 +29,7 @@ public sealed class Agent(
         var planned = false;
         var nudged = false;
         var budget = new IterationBudget(limits, ui, _log);
+        runner.ForgetFailures();
 
         while (budget.TryTakeTurn(planned))
         {
@@ -78,6 +79,13 @@ public sealed class Agent(
             {
                 planned |= call.Name == PlanTool.ToolName;
                 conversation.Add(Message.ToolResult(call.Id, await runner.RunAsync(call, cancellation)));
+            }
+
+            if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
+            {
+                _log.Write("turn_end", new { reason = "stuck", tool = stuck.Name });
+                ui.Show($"Stopped: the model made the same failing {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times. Tell it what to do differently.");
+                return;
             }
         }
 

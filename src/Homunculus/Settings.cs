@@ -12,9 +12,14 @@ public sealed record Settings(
     IReadOnlyList<string>? EnabledTools = null,
     bool ShowReasoning = true,
     string? LogFile = null,
-    Shell? Shell = null)
+    Shell? Shell = null,
+    string? ReasoningEffort = null)
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
+
+    public const string ReasoningEfforts = "none, low, medium or high";
+
+    private static readonly string[] ReasoningEffortValues = ["none", "low", "medium", "high"];
 
     private static bool IsUnlimited(string text) =>
         text.Equals("unlimited", StringComparison.OrdinalIgnoreCase) || text.Equals("none", StringComparison.OrdinalIgnoreCase);
@@ -47,6 +52,10 @@ public sealed record Settings(
             Env("HOMUNCULUS_LOG_FILE"),
             Env("HOMUNCULUS_SHELL") is { } shell
                 ? Shell.Named(shell) ?? throw new InvalidOperationException($"HOMUNCULUS_SHELL must be {Shell.Choices}, not '{shell}'.")
+                : null,
+            Env("HOMUNCULUS_REASONING_EFFORT") is { } effort
+                ? ReasoningEffortValues.FirstOrDefault(value => value.Equals(effort, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidOperationException($"HOMUNCULUS_REASONING_EFFORT must be {ReasoningEfforts}, not '{effort}'.")
                 : null);
     }
 }
