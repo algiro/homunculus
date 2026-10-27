@@ -28,6 +28,11 @@ public sealed class ChangedFiles(ProjectDirectory project)
 
     public bool WasCreatedInSession(string path) => _createdInSession.Contains(path);
 
+    public bool IsChangedThisTurn(string path) => _thisTurn.ContainsKey(path);
+
+    /// <summary>Takes a file off this turn's list, for a change that was undone.</summary>
+    public void Forget(string path) => _thisTurn.Remove(path);
+
     public void StartTurn() => _thisTurn.Clear();
 
     /// <summary>One line per file changed since <see cref="StartTurn"/>, or null when none was.</summary>

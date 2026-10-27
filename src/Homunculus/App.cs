@@ -17,7 +17,8 @@ public sealed class App
         "and use insert_lines, not a rewritten block, to add a line next to an existing one (for example to register something), " +
         "read a file before editing it, and keep answers short. When you run tests or a build, make sure they use your latest edits. " +
         "Before you implement an interface, read it and one existing implementation. If your new code does not compile, fix your own code: " +
-        "never change or delete existing files or types to make it compile.";
+        "never change or delete existing files or types to make it compile. " +
+        "Put each new class in its own file, named after it, and create it before you register it or use it anywhere else.";
 
     public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
     {
@@ -44,10 +45,12 @@ public sealed class App
         });
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, Changes);
 
-        var check = settings.CheckCommand is { } checkCommand
-            ? new ProjectCheck(checkCommand, new CommandRunner(project, settings.CommandTimeout, settings.Shell), project)
+        var guard = settings.CheckCommand is { } checkCommand
+            ? new ChangeGuard(
+                new ProjectCheck(checkCommand, new CommandRunner(project, settings.CommandTimeout, settings.Shell), project),
+                Changes, project, ui, log, settings.CheckRevert)
             : null;
-        Runner = new ToolRunner(Tools, approvals, ui, log, check);
+        Runner = new ToolRunner(Tools, approvals, ui, log, guard);
         Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log, Changes, Reads);
 
         var commands = new CommandRegistry();
