@@ -15,6 +15,9 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
 {
     public const int StopAfterIdenticalFailures = 3;
 
+    private const string RepeatWarning = " You already made this exact call and it failed the same way; repeating it cannot work, so change your approach.";
+    private const string RefusalAdvice = " Do not retry it or work around it (for example by changing the code or the policy); tell the user what you need instead.";
+
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
     private readonly Dictionary<string, int> _failures = [];
 
@@ -38,7 +41,7 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
         try
         {
             var refusal = await approvals.CheckAsync(tool, call.Arguments, cancellation);
-            result = refusal ?? await tool.RunAsync(call.Arguments, cancellation);
+            result = refusal is null ? await tool.RunAsync(call.Arguments, cancellation) : Refused(call, refusal);
             if (refusal is null) _failures.Remove(KeyOf(call));
             if (refusal is null && tool.EffectOf(call.Arguments).Access == ToolAccess.Plan && result.Length > 0)
                 ui.Show(result);
@@ -55,14 +58,19 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
     /// <summary>The model reads the failure as the tool's result; the user sees it too, so a later claim of success can be checked.</summary>
     private string ShowFailure(ToolCall call, string message)
     {
-        var key = KeyOf(call);
-        _failures[key] = _failures.GetValueOrDefault(key) + 1;
-        var failure = $"Error: {message}";
-        if (_failures[key] > 1)
-            failure += " You already made this exact call and it failed the same way; repeating it cannot work, so change your approach.";
-
+        var failure = $"Error: {message}" + RepeatWarningFor(call);
         ui.Show($"  <- {failure}");
         return failure;
+    }
+
+    /// <summary>The user already knows what they refused, so nothing is shown; the model is told not to argue with it.</summary>
+    private string Refused(ToolCall call, string refusal) => refusal + RefusalAdvice + RepeatWarningFor(call);
+
+    private string RepeatWarningFor(ToolCall call)
+    {
+        var key = KeyOf(call);
+        _failures[key] = _failures.GetValueOrDefault(key) + 1;
+        return _failures[key] > 1 ? RepeatWarning : "";
     }
 
     /// <summary>The tool and its arguments, whatever order the model wrote them in.</summary>

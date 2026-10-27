@@ -40,12 +40,20 @@ public class AppTests
     }
 
     [Test]
-    public async Task JudgeModeStopsACommandTheJudgeDenies()
+    public async Task JudgeModeStopsACommandTheJudgeDeniesWhenTheUserAgrees()
     {
-        var model = await RunCommandWithJudge("deny");
+        var model = await RunCommandWithJudge("deny", 'n');
 
-        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("Denied by the policy."));
-        Assert.That(_app.Ui.Questions, Is.Empty);
+        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Refused by the user."));
+        Assert.That(_app.Ui.Questions.Single(), Does.Contain("would deny"));
+    }
+
+    [Test]
+    public async Task JudgeModeRunsADeniedCommandWhenTheUserOverrulesTheJudge()
+    {
+        var model = await RunCommandWithJudge("deny", 'y');
+
+        Assert.That(model.Conversations[1][^1].Content, Does.Contain("[exit code 0]"));
     }
 
     [Test]
@@ -126,7 +134,7 @@ public class AppTests
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
         Assert.That(_app.Ui.Questions.Single(), Does.Contain("OUTSIDE"));
-        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("Refused by the user."));
+        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Refused by the user."));
     }
 
     [Test]

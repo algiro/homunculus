@@ -13,7 +13,8 @@ public sealed record Settings(
     bool ShowReasoning = true,
     string? LogFile = null,
     Shell? Shell = null,
-    string? ReasoningEffort = null)
+    string? ReasoningEffort = null,
+    string? JudgeReasoningEffort = null)
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
 
@@ -32,6 +33,11 @@ public sealed record Settings(
         int Number(string name, int fallback) => int.TryParse(Env(name), out var value) ? value : fallback;
         int Limit(string name, int fallback) =>
             Env(name) is { } text && IsUnlimited(text) ? 0 : Number(name, fallback);
+
+        string? Effort(string name) => Env(name) is { } effort
+            ? ReasoningEffortValues.FirstOrDefault(value => value.Equals(effort, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException($"{name} must be {ReasoningEfforts}, not '{effort}'.")
+            : null;
 
         var baseUrl = Env("HOMUNCULUS_BASE_URL") ?? DefaultBaseUrl;
         var model = Env("HOMUNCULUS_MODEL") ?? "qwen3:8b";
@@ -53,9 +59,7 @@ public sealed record Settings(
             Env("HOMUNCULUS_SHELL") is { } shell
                 ? Shell.Named(shell) ?? throw new InvalidOperationException($"HOMUNCULUS_SHELL must be {Shell.Choices}, not '{shell}'.")
                 : null,
-            Env("HOMUNCULUS_REASONING_EFFORT") is { } effort
-                ? ReasoningEffortValues.FirstOrDefault(value => value.Equals(effort, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new InvalidOperationException($"HOMUNCULUS_REASONING_EFFORT must be {ReasoningEfforts}, not '{effort}'.")
-                : null);
+            Effort("HOMUNCULUS_REASONING_EFFORT"),
+            Effort("HOMUNCULUS_JUDGE_REASONING_EFFORT"));
     }
 }

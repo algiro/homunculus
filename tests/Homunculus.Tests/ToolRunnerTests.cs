@@ -112,7 +112,41 @@ public class ToolRunnerTests
 
         var result = await Run("run_command", """{"command":"echo hi"}""");
 
-        Assert.That(result, Is.EqualTo("Refused by the user."));
+        Assert.That(result, Does.StartWith("Refused by the user."));
+    }
+
+    [Test]
+    public async Task TellsTheModelNotToRetryOrWorkAroundARefusal()
+    {
+        Start("effect");
+        _app.Ui.Answers('n');
+
+        var result = await Run("run_command", """{"command":"echo hi"}""");
+
+        Assert.That(result, Does.Contain("Do not retry it or work around it").And.Contain("tell the user"));
+    }
+
+    [Test]
+    public async Task DoesNotShowARefusalAsAnError()
+    {
+        Start("effect");
+        _app.Ui.Answers('n');
+
+        await Run("run_command", """{"command":"echo hi"}""");
+
+        Assert.That(_app.Ui.AllOutput, Does.Not.Contain("<-"));
+    }
+
+    [Test]
+    public async Task WarnsTheModelThatKeepsAskingForWhatTheUserRefused()
+    {
+        Start("effect");
+        _app.Ui.Answers('n', 'n');
+        await Run("run_command", """{"command":"echo hi"}""");
+
+        var second = await Run("run_command", """{"command":"echo hi"}""");
+
+        Assert.That(second, Does.Contain("You already made this exact call"));
     }
 
     [Test]

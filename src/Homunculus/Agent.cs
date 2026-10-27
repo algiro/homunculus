@@ -84,7 +84,7 @@ public sealed class Agent(
             if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
             {
                 _log.Write("turn_end", new { reason = "stuck", tool = stuck.Name });
-                ui.Show($"Stopped: the model made the same failing {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times. Tell it what to do differently.");
+                ui.Show($"Stopped: the model made the same {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times and it failed or was refused each time. Tell it what to do differently.");
                 return;
             }
         }

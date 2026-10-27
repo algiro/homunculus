@@ -7,46 +7,65 @@ public class ClosestLineTests
     private const string Source = "using System;\nvar commands = new CommandRegistry();\ncommands\n    .Add(new HelpCommand(commands, ui))\n    .Add(new PolicyCommand(Policy, ui))\n    .Add(new ExitCommand());\n";
 
     [Test]
-    public void FindsTheLineThatSharesTheRarestIdentifier()
+    public void FindsTheRealLineSharingTheRarestIdentifier()
     {
-        var found = ClosestLine.Find(Source, "registry.Register<PolicyCommand>();");
+        var found = ClosestLine.Find(Source, "registry.Register<PolicyCommand>();")!;
 
-        Assert.That(found, Is.EqualTo((5, ".Add(new PolicyCommand(Policy, ui))")));
+        Assert.That((found.QuotedNumber, found.QuotedText), Is.EqualTo((1, "registry.Register<PolicyCommand>();")));
+        Assert.That((found.ClosestNumber, found.ClosestText), Is.EqualTo((5, "    .Add(new PolicyCommand(Policy, ui))")));
     }
 
     [Test]
-    public void LooksOnlyAtTheFirstLineThatHasWords()
+    public void PointsAtTheFirstQuotedLineThatIsNotInTheFileNotAtTheFirstLine()
     {
-        var found = ClosestLine.Find(Source, "\n  {\n.Add(new ExitCommand());\nUnrelated();");
+        var quoted = "commands\n    .Add(new HelpCommand(commands, ui))\n    .Add(new TooolsCommand(Tools, ui))\n    .Add(new ExitCommand());";
 
-        Assert.That(found!.Value.Number, Is.EqualTo(6));
+        var found = ClosestLine.Find(Source, quoted)!;
+
+        Assert.That(found.QuotedNumber, Is.EqualTo(3));
+        Assert.That(found.QuotedText, Is.EqualTo("    .Add(new TooolsCommand(Tools, ui))"));
     }
 
     [Test]
-    public void IgnoresLineEndingsAndIndentationInWhatItReturns()
+    public void NoticesALineWhoseIndentationIsWrong()
     {
-        var found = ClosestLine.Find("one\r\n    two words\r\nthree\r\n", "two");
+        var found = ClosestLine.Find(Source, "  .Add(new ExitCommand());")!;
 
-        Assert.That(found, Is.EqualTo((2, "two words")));
+        Assert.That(found.ClosestText, Is.EqualTo("    .Add(new ExitCommand());"));
     }
 
     [Test]
-    public void FindsNothingWhenNoWordIsShared() =>
-        Assert.That(ClosestLine.Find(Source, "zzz_unrelated()"), Is.Null);
+    public void IgnoresLineEndings()
+    {
+        var found = ClosestLine.Find("one\r\n    two words\r\nthree\r\n", "two")!;
+
+        Assert.That((found.ClosestNumber, found.ClosestText), Is.EqualTo((2, "    two words")));
+    }
 
     [Test]
-    public void FindsNothingForTextWithoutWords() =>
+    public void SaysWhichLineIsMissingEvenWhenNoRealLineIsSimilar()
+    {
+        var found = ClosestLine.Find(Source, "zzz_unrelated()")!;
+
+        Assert.That(found.QuotedNumber, Is.EqualTo(1));
+        Assert.That(found.ClosestNumber, Is.Null);
+        Assert.That(found.ClosestText, Is.Null);
+    }
+
+    [Test]
+    public void FindsNothingToSayWhenEveryQuotedLineIsInTheFile() =>
+        Assert.That(ClosestLine.Find(Source, "    .Add(new ExitCommand());\ncommands"), Is.Null);
+
+    [Test]
+    public void SkipsQuotedLinesThatHaveNoWords() =>
         Assert.That(ClosestLine.Find(Source, "  {};\n"), Is.Null);
 
     [Test]
     public void CutsAVeryLongLine()
     {
-        var found = ClosestLine.Find(new string('x', 500), "xxxxxxxxxx");
+        var found = ClosestLine.Find("short\n" + new string('x', 500), new string('x', 400) + "y")!;
 
-        Assert.That(found, Is.Null, "a different word than the long one");
-
-        var same = ClosestLine.Find(new string('x', 500), new string('x', 500));
-
-        Assert.That(same!.Value.Text, Has.Length.EqualTo(203).And.EndsWith("..."));
+        Assert.That(found.QuotedText, Has.Length.EqualTo(203).And.EndsWith("..."));
+        Assert.That(found.ClosestNumber, Is.Null, "the long word is not a word of the file");
     }
 }

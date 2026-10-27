@@ -100,7 +100,8 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
 | `HOMUNCULUS_SHELL` | detected: PowerShell 7, else Windows PowerShell, else `cmd.exe` on Windows, `sh` elsewhere; set `pwsh`, `powershell`, `cmd` or `sh` to force one |
-| `HOMUNCULUS_REASONING_EFFORT` | not sent; `none`, `low`, `medium` or `high` is sent as `reasoning_effort` to both models. `none` turns thinking off on servers that support it (Ollama does), which makes small reasoning models much faster |
+| `HOMUNCULUS_REASONING_EFFORT` | not sent; `none`, `low`, `medium` or `high` is sent as `reasoning_effort` to the agent model. `none` turns thinking off on servers that support it (Ollama does), which makes small reasoning models much faster |
+| `HOMUNCULUS_JUDGE_REASONING_EFFORT` | not sent; the same for the judge model. Leave it unset for small models: without thinking they tend to answer `deny` to routine commands such as `dotnet test` |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
 
@@ -142,7 +143,7 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
-Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened. If the model repeats the exact same failing call, it is told so the second time, and the third time the turn stops with a message instead of looping.
+Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened. If the model repeats the exact same failing or refused call, it is told so the second time, and the third time the turn stops with a message instead of looping. A refusal also tells the model not to retry it or work around it.
 
 ## Approvals
 
@@ -152,7 +153,7 @@ Every call is announced on screen as `-> tool {arguments}` before it runs. Failu
 
 | Mode | Behavior |
 |---|---|
-| `judge` (default) | A second model call decides `allow`, `deny` or `ask` for each command; `ask` comes to you. |
+| `judge` (default) | A second model call decides `allow`, `deny` or `ask` for each command. `ask` comes to you, and so does `deny`: a judge can be wrong, so you can overrule it with `y` (once; it is not remembered). |
 | `effect` | Always asks you. |
 | `allow-all` | Never asks (access outside the project still does). |
 

@@ -184,6 +184,7 @@ public class AgentTests
     public async Task DoesNotRunAToolThePolicyDenies()
     {
         var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("understood"));
+        _ui.Answers('n');
 
         await Ask(Build(model, Verdict.Deny));
 
