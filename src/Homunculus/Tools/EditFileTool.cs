@@ -24,18 +24,29 @@ public sealed class EditFileTool(ProjectDirectory project) : FileTool(project)
             return Create(path, newText);
 
         if (!File.Exists(path))
-            throw new ToolException($"File not found: {path}");
+            throw new ToolException($"File not found: {path}. To create a file, use an empty old_str.");
 
         var content = File.ReadAllText(path);
+        (oldText, newText) = MatchLineEndings(content, oldText, newText);
         var matches = CountOccurrences(content, oldText);
         if (matches == 0)
-            throw new ToolException("old_str was not found in the file.");
+            throw new ToolException(
+                "old_str was not found in the file. Read the file again and copy the text exactly, including indentation; " +
+                "prefer one short line that appears only once.");
         if (matches > 1)
             throw new ToolException($"old_str matches {matches} places; add more context so it matches exactly once.");
 
         File.WriteAllText(path, content.Replace(oldText, newText, StringComparison.Ordinal));
         return $"Edited {path}";
     }
+
+    /// <summary>Models write "\n". In a file with "\r\n" line endings their multi-line text would never match, so it is converted.</summary>
+    private static (string Old, string New) MatchLineEndings(string content, string oldText, string newText) =>
+        content.Contains("\r\n", StringComparison.Ordinal) && !oldText.Contains('\r')
+            ? (WithWindowsLineEndings(oldText), WithWindowsLineEndings(newText))
+            : (oldText, newText);
+
+    private static string WithWindowsLineEndings(string text) => text.Replace("\r\n", "\n").Replace("\n", "\r\n");
 
     private static string Create(string path, string content)
     {

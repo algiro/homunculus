@@ -93,13 +93,14 @@ public class ToolRunnerTests
     }
 
     [Test]
-    public async Task DoesNotShowThePlanWhenTheCallFails()
+    public async Task ShowsTheErrorInsteadOfAPlanWhenTheCallFails()
     {
         Start();
 
         await Run("plan", "{}");
 
-        Assert.That(_app.Ui.Output, Has.Count.EqualTo(1));
+        Assert.That(_app.Ui.Output, Has.Count.EqualTo(2));
+        Assert.That(_app.Ui.Output[1], Does.StartWith("  <- Error:"));
     }
 
     [Test]
@@ -171,5 +172,46 @@ public class ToolRunnerTests
         public ToolEffect EffectOf(System.Text.Json.JsonElement arguments) => ToolEffect.Planning;
         public Task<string> RunAsync(System.Text.Json.JsonElement arguments, CancellationToken cancellation) =>
             throw new InvalidOperationException("bug");
+    }
+
+    [Test]
+    public async Task ShowsTheUserWhyAToolFailed()
+    {
+        Start();
+
+        await Run("read_file", """{"path":"nope.txt"}""");
+
+        Assert.That(_app.Ui.Output[^1], Does.StartWith("  <- Error: File not found"));
+    }
+
+    [Test]
+    public async Task ShowsTheUserThatAToolIsUnknown()
+    {
+        Start();
+
+        await Run("fly", "{}");
+
+        Assert.That(_app.Ui.Output.Single(), Is.EqualTo("  <- Error: unknown tool 'fly'."));
+    }
+
+    [Test]
+    public async Task ShowsNoFailureLineWhenTheToolWorks()
+    {
+        Start();
+
+        await Run("list_files", "{}");
+
+        Assert.That(_app.Ui.AllOutput, Does.Not.Contain("<-"));
+    }
+
+    [Test]
+    public async Task DoesNotCallARefusalByTheUserAFailure()
+    {
+        Start("effect");
+        _app.Ui.Answers('n');
+
+        await Run("run_command", """{"command":"echo hi"}""");
+
+        Assert.That(_app.Ui.AllOutput, Does.Not.Contain("<-"));
     }
 }

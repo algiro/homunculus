@@ -65,7 +65,7 @@ public class EditFileToolTests
 
         var error = Assert.ThrowsAsync<ToolException>(() => Run("a.txt", "zzz", "x"));
 
-        Assert.That(error!.Message, Does.Contain("not found"));
+        Assert.That(error!.Message, Does.Contain("not found").And.Contain("Read the file again").And.Contain("one short line"));
     }
 
     [Test]
@@ -102,4 +102,42 @@ public class EditFileToolTests
     public void WritesTheGivenFile() =>
         Assert.That(_tool.EffectOf(Json.Parse("""{"path":"a.txt"}""")),
             Is.EqualTo(new ToolEffect(ToolAccess.Write, _project.Location.Resolve("a.txt"))));
+
+    [Test]
+    public void TellsHowToCreateAFileWhenEditingOneThatDoesNotExist()
+    {
+        var error = Assert.ThrowsAsync<ToolException>(() => Run("nope.txt", "a", "b"));
+
+        Assert.That(error!.Message, Does.Contain("empty old_str"));
+    }
+
+    [Test]
+    public async Task MatchesMultiLineTextInAFileWithWindowsLineEndings()
+    {
+        _project.Write("a.txt", "one\r\ntwo\r\nthree\r\n");
+
+        await Run("a.txt", "one\ntwo", "1\n2");
+
+        Assert.That(_project.Read("a.txt"), Is.EqualTo("1\r\n2\r\nthree\r\n"));
+    }
+
+    [Test]
+    public async Task KeepsUnixLineEndingsInAFileThatHasThem()
+    {
+        _project.Write("a.txt", "one\ntwo\n");
+
+        await Run("a.txt", "one\ntwo", "1\n2");
+
+        Assert.That(_project.Read("a.txt"), Is.EqualTo("1\n2\n"));
+    }
+
+    [Test]
+    public async Task DoesNotDoubleTheCarriageReturnsOfTextThatAlreadyHasThem()
+    {
+        _project.Write("a.txt", "one\r\ntwo\r\n");
+
+        await Run("a.txt", "one", "1\r\n1b");
+
+        Assert.That(_project.Read("a.txt"), Is.EqualTo("1\r\n1b\r\ntwo\r\n"));
+    }
 }
