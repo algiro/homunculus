@@ -7,7 +7,8 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
 {
     public override string Name => "edit_file";
     public override string Description =>
-        "Replace the single exact occurrence of old_str with new_str in a file; to add something, keep the old text in new_str too. " +
+        "Replace the single exact occurrence of old_str with new_str in a file; to add something, keep the old text in new_str too " +
+        "(to add lines next to an existing line, insert_lines is simpler). " +
         "With an empty old_str, create a new file containing new_str.";
     public override JsonObject Parameters => Schema.Of(
         Parameter.Required("path", "File to edit or create."),
@@ -22,11 +23,10 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
         var oldText = arguments.Text("old_str");
         var newText = arguments.Text("new_str");
 
-        if (Directory.Exists(path))
-            throw new ToolException($"{Relative(path)} is a directory, not a file. Give the path of a file, for example {Relative(path)}/<file name>.");
+        RefuseDirectory(path);
 
-        if (LooksDoubleEscaped(newText) && (oldText.Length == 0 || oldText.Contains('\n')))
-            throw new ToolException(EscapedLineBreaks("new_str"));
+        if (EscapedLineBreaks.Look(newText) && (oldText.Length == 0 || oldText.Contains('\n')))
+            throw new ToolException(EscapedLineBreaks.Complaint("new_str"));
 
         if (oldText.Length == 0)
             return Create(path, newText);
@@ -63,8 +63,8 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
     {
         var message = "old_str was not found in the file. Read the file again and copy the text exactly, including indentation; " +
                       "prefer one short line that appears only once.";
-        if (LooksDoubleEscaped(oldText))
-            message += " " + EscapedLineBreaks("old_str");
+        if (EscapedLineBreaks.Look(oldText))
+            message += " " + EscapedLineBreaks.Complaint("old_str");
         if (ClosestLine.Find(content, oldText) is { } mismatch)
         {
             message += $" Line {mismatch.QuotedNumber} of old_str is not in the file: {mismatch.QuotedText}";
@@ -79,13 +79,6 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
 
         return message;
     }
-
-    /// <summary>A model that escapes its own escapes sends the characters backslash and n where it means a line break.</summary>
-    private static bool LooksDoubleEscaped(string text) =>
-        !text.Contains('\n') && CountOccurrences(text, "\\n") >= 2;
-
-    private static string EscapedLineBreaks(string argument) =>
-        $"{argument} has no line breaks but contains the two characters backslash and n. Write real line breaks, not the characters \\n.";
 
     /// <summary>Models write "\n". In a file with "\r\n" line endings their multi-line text would never match, so it is converted.</summary>
     private static (string Old, string New) MatchLineEndings(string content, string oldText, string newText) =>
@@ -107,9 +100,9 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
     }
 
     /// <summary>
-    /// A new file is better written after looking at what it builds on. First choice: files named after a name the new code
-    /// uses (ICommand for ": ICommand"), found in its folder or above it, that the model has not read. Failing that, any
-    /// neighbour at all.
+    /// A new file is better written after looking at what it builds on. First choice: files of the same kind (same extension)
+    /// named after a name the new code uses (ICommand for ": ICommand"), found in its folder or above it, that the model has
+    /// not read. Failing that, any neighbour at all.
     /// </summary>
     private string UnreadFilesNote(string path, string content)
     {
@@ -117,13 +110,15 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
 
         var folder = Path.GetDirectoryName(path)!;
         var used = Identifiers.In(content);
+        var extension = Path.GetExtension(path);
         var unread = FoldersFrom(folder)
             .SelectMany(Directory.EnumerateFiles)
-            .Where(other => other != path && used.Contains(Path.GetFileNameWithoutExtension(other)) && !reads.HasRead(other))
+            .Where(other => other != path && Path.GetExtension(other) == extension
+                            && used.Contains(Path.GetFileNameWithoutExtension(other)) && !reads.HasRead(other))
             .Distinct().Order(StringComparer.Ordinal).Take(MaxNamedFiles).ToArray();
         if (unread.Length > 0)
         {
-            var names = string.Join(", ", unread.Select(Path.GetFileNameWithoutExtension));
+            var names = string.Join(", ", unread.Select(Path.GetFileNameWithoutExtension).Distinct());
             var files = string.Join(", ", unread.Select(Relative));
             return $". It uses {names}, defined in {files}, which you have not read. Read them and check that this file matches.";
         }
