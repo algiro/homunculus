@@ -31,6 +31,9 @@ public sealed class EditFileTool(ProjectDirectory project, ChangedFiles? changes
         if (oldText.Length == 0)
             return Create(path, newText);
 
+        if (oldText == newText)
+            throw new ToolException("old_str and new_str are identical, so there is nothing to change. Make new_str the text you want instead.");
+
         if (!File.Exists(path))
             throw new ToolException($"File not found: {path}. To create a file, use an empty old_str.");
 

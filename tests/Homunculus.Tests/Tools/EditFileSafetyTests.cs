@@ -117,4 +117,23 @@ public class EditFileSafetyTests
         Assert.That(error!.Message, Does.Contain("Every line of old_str is in the file, but not together as one block")
             .And.Contain("Use just one of those lines"));
     }
+
+    [Test]
+    public void RefusesAnEditThatReplacesTextWithItself()
+    {
+        _project.Write("App.cs", "using X;\n");
+
+        var error = Assert.ThrowsAsync<ToolException>(() => Edit("App.cs", "using X;", "using X;"));
+
+        Assert.That(error!.Message, Does.StartWith("old_str and new_str are identical, so there is nothing to change."));
+        Assert.That(_changes.Summary(), Is.Null);
+    }
+
+    [Test]
+    public async Task StillCreatesAFileWhenBothArePresentButOldIsEmpty()
+    {
+        var result = await Edit("New.cs", "", "text");
+
+        Assert.That(result, Does.StartWith("Created"));
+    }
 }

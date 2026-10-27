@@ -16,7 +16,8 @@ public sealed record Settings(
     Shell? Shell = null,
     string? ReasoningEffort = null,
     string? JudgeReasoningEffort = null,
-    string? CheckCommand = null)
+    string? CheckCommand = null,
+    bool CheckRevert = true)
 {
     private const string DefaultBaseUrl = "https://api.openai.com/v1";
 
@@ -66,6 +67,7 @@ public sealed record Settings(
                 : null,
             Effort("HOMUNCULUS_REASONING_EFFORT"),
             Effort("HOMUNCULUS_JUDGE_REASONING_EFFORT"),
-            Env("HOMUNCULUS_CHECK_COMMAND"));
+            Env("HOMUNCULUS_CHECK_COMMAND"),
+            !bool.TryParse(Env("HOMUNCULUS_CHECK_REVERT"), out var checkRevert) || checkRevert);
     }
 }
