@@ -13,6 +13,7 @@ public sealed class App
         $"You are a coding agent working in the project directory {project.Root}. Use paths relative to it " +
         "(for example '.' is the project root); reaching anything outside it needs the user's approval each time. " +
         "Use the tools to inspect and change files and to run commands. List a directory before reading files in it, " +
+        "and search with grep and glob to find where something is defined or used instead of guessing a path, " +
         "read a file before editing it, and keep answers short. When you run tests or a build, make sure they use your latest edits. " +
         "Before you implement an interface, read it and one existing implementation. If your new code does not compile, fix your own code: " +
         "never change or delete existing files or types to make it compile.";
@@ -25,6 +26,8 @@ public sealed class App
         Tools = new ToolRegistry(
         [
             new ListFilesTool(project),
+            new GlobTool(project),
+            new GrepTool(project),
             new ReadFileTool(project, Reads),
             new EditFileTool(project, Changes, Reads),
             new DeleteFileTool(project, Changes),
