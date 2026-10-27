@@ -6,7 +6,7 @@ namespace Homunculus.Llm;
 /// <summary>The shapes of the OpenAI chat-completions JSON. Property names become snake_case when serialized.</summary>
 internal static class OpenAiWire
 {
-    public sealed record RequestDto(string Model, List<MessageDto> Messages, List<ToolDto>? Tools);
+    public sealed record RequestDto(string Model, List<MessageDto> Messages, List<ToolDto>? Tools, string? ReasoningEffort = null);
 
     public sealed record MessageDto(string Role, string? Content, List<ToolCallDto>? ToolCalls = null, string? ToolCallId = null);
 
