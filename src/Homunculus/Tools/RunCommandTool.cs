@@ -52,7 +52,7 @@ public sealed class RunCommandTool(ProjectDirectory project, TimeSpan timeout, S
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        info.ArgumentList.Add(_shell.RunFlag);
+        foreach (var argument in _shell.Arguments) info.ArgumentList.Add(argument);
         info.ArgumentList.Add(command);
         return Process.Start(info)!;
     }

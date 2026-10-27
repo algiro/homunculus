@@ -1,6 +1,7 @@
 using Homunculus.Commands;
 using Homunculus.Llm;
 using Homunculus.Tests.Support;
+using Homunculus.Tools;
 using NSubstitute;
 
 namespace Homunculus.Tests;
@@ -236,7 +237,7 @@ public class AppTests
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
         var description = model.ToolLists[0].Single(tool => tool.Name == "run_command").Description;
-        Assert.That(description, Does.Contain(OperatingSystem.IsWindows() ? "cmd.exe" : "sh"));
+        Assert.That(description, Does.Contain(Shell.Detect().Name));
     }
 
     [Test]

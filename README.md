@@ -137,7 +137,7 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `read_file` | Reads a text file (at most 100,000 characters). |
 | `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. |
 | `delete_file` | Deletes a file. Directories are refused. |
-| `run_command` | Runs a command line in the project folder (`cmd.exe` on Windows, `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
+| `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
 Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text.
