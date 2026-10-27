@@ -94,7 +94,7 @@ public sealed class ChangeGuard(
         if (before.DidNotFinish) return null;
 
         var known = before.Errors.Select(error => error.Key).ToHashSet();
-        var added = afterEdit.Errors.Where(error => !known.Contains(error.Key)).Select(error => error.Line).ToList();
+        var added = afterEdit.Errors.Where(error => !known.Contains(error.Key)).Select(error => error.Display).ToList();
         return added.Count == 0
             ? null
             : $"this change added build errors that the project did not have before, so {file} is back as it was. The new errors:\n" +

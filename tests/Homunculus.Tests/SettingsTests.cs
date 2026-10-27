@@ -18,8 +18,8 @@ public class SettingsTests
         Assert.That(settings.Model, Is.EqualTo("qwen3:8b"));
         Assert.That(settings.JudgeModel, Is.EqualTo("qwen3:8b"));
         Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(600)));
-        Assert.That(settings.Iterations.Normal, Is.EqualTo(8));
-        Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(24));
+        Assert.That(settings.Iterations.Normal, Is.EqualTo(16));
+        Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(32));
     }
 
     [Test]
@@ -73,7 +73,7 @@ public class SettingsTests
 
     [Test]
     public void FallsBackToTheDefaultForANonNumericValue() =>
-        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", "many")).Iterations.Normal, Is.EqualTo(8));
+        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", "many")).Iterations.Normal, Is.EqualTo(16));
 
     [Test]
     public void TreatsEmptyValuesAsUnset() =>

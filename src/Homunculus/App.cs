@@ -20,7 +20,14 @@ public sealed class App
         "never change or delete existing files or types to make it compile. " +
         "Put each new class in its own file, named after it, and create it before you register it or use it anywhere else.";
 
-    public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
+    public App(
+        Settings settings,
+        IUserInterface ui,
+        ProjectDirectory project,
+        ILanguageModel model,
+        ILanguageModel judge,
+        IEventLog? log = null,
+        CheckDetector? checks = null)
     {
         Changes = new ChangedFiles(project);
         Reads = new ReadFiles();
@@ -46,7 +53,8 @@ public sealed class App
         });
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, Changes);
 
-        var guard = settings.CheckCommand is { } checkCommand
+        var check = CheckSelection.Choose(settings.CheckCommand, project.Root, checks ?? CheckDetector.ForThisMachine());
+        var guard = check.Command is { } checkCommand
             ? new ChangeGuard(
                 new ProjectCheck(checkCommand, new CommandRunner(project, settings.CommandTimeout, settings.Shell), project),
                 Changes, project, ui, log, settings.CheckRevert)
@@ -63,7 +71,7 @@ public sealed class App
             .Add(new PlanCommand(Plan, ui))
             .Add(new ClearCommand(Agent, Plan, ui))
             .Add(new ExitCommand());
-        Repl = new Repl(Agent, commands, ui);
+        Repl = new Repl(Agent, commands, ui, check.Note);
     }
 
     public UsageLedger Usage { get; } = new();

@@ -95,14 +95,14 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_BASE_URL` | `https://api.openai.com/v1` |
 | `HOMUNCULUS_MODEL` | `qwen3:8b` |
 | `HOMUNCULUS_JUDGE_MODEL` | same as the model |
-| `HOMUNCULUS_MAX_ITERATIONS` | 8; model calls per message before you are asked whether to continue (each `y` allows another batch of the same size). `unlimited`, `none` or `0` never asks |
-| `HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING` | 24; the same, once the agent has made a plan |
+| `HOMUNCULUS_MAX_ITERATIONS` | 16; model calls per message before you are asked whether to continue (each `y` allows another batch of the same size). `unlimited`, `none` or `0` never asks |
+| `HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING` | 32; the same, once the agent has made a plan |
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
 | `HOMUNCULUS_SHELL` | detected: PowerShell 7, else Windows PowerShell, else `cmd.exe` on Windows, `sh` elsewhere; set `pwsh`, `powershell`, `cmd` or `sh` to force one |
 | `HOMUNCULUS_REASONING_EFFORT` | not sent; `none`, `low`, `medium` or `high` is sent as `reasoning_effort` to the agent model. `none` turns thinking off on servers that support it (Ollama does), which makes small reasoning models much faster |
 | `HOMUNCULUS_JUDGE_REASONING_EFFORT` | not sent; the same for the judge model. Leave it unset for small models: without thinking they tend to answer `deny` to routine commands such as `dotnet test` |
-| `HOMUNCULUS_CHECK_COMMAND` | none; a command line such as `dotnet build --no-restore -v q` that proves the project still works. It runs after every change to a file (create, edit, insert, delete) and its verdict is added to the tool result: `Check passed.`, or the first error lines (paths start at the project) when it fails. The agent model then fixes mistakes at once. Runs with the same shell and time limit as `run_command`; you see `check: passed` or `check: failed` on screen. An edit to an existing file the agent did not create that turns a passing build into a failing one, or adds errors to a build that was already failing, is undone (see `HOMUNCULUS_CHECK_REVERT`) |
+| `HOMUNCULUS_CHECK_COMMAND` | found for the project (see [Check command](#check-command)); set it to your own command line, or to `off` for no check. The check runs after every change to a file and its verdict is added to the tool result, with the same shell and time limit as `run_command`; you see `check: passed` or `check: failed` on screen. An edit to an existing file the agent did not create that turns a passing build into a failing one, or adds errors to a build that was already failing, is undone (see `HOMUNCULUS_CHECK_REVERT`) |
 | `HOMUNCULUS_CHECK_REVERT` | `true`; with a check command, `false` only reports a failing check and keeps the edit. Undoing costs one extra check run, and only when a check fails: the file is put back and the check runs again. The undo stays if the build recovers, or if the edit had added errors the project did not have (errors are compared without their line numbers, and a build's totals line is ignored); otherwise the edit is put back. Files the agent created itself, new files and deletions are never undone |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
@@ -146,12 +146,35 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `edit_file` | Replaces the one exact occurrence of a text in a file (refusing an edit whose old and new text are identical), or creates a new file when the old text is empty (`write_file` is simpler for that). When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. Pointing it at a directory says so too, and a new file gets a reminder to read the files it builds on first: the unread files of the same kind (same extension) named after a name its code uses (`ICommand` for `: ICommand`) in its folder or above, else any unread neighbour. |
 | `insert_lines` | Inserts lines before or after an existing line (`line`; `position` is `after` by default), for example to register something next to its siblings. The line is matched ignoring indentation, the new lines take its indentation, the file's line endings are kept, and the result shows the lines around the insertion. An anchor can also be several consecutive lines (the text goes after the last one, or before the first). An anchor that is not in the file gets the closest real line; one that matches several places gets their line numbers. |
 | `delete_file` | Deletes a file. Directories are refused. Deleting a file the agent did not create itself in this session is always put to you first. |
-| `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. Its description tells the model not to create or edit files with it, since those changes would escape the check, the undo and the end-of-turn list. |
+| `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. Output beyond 20,000 characters is cut in the middle, keeping the start and the end (where a build or test run prints what went wrong, then the exit code). The tool description tells the model which shell and operating system it got. Its description tells the model not to create or edit files with it, since those changes would escape the check, the undo and the end-of-turn list. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
 Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened. If the model repeats the exact same failing or refused call, it is told so the second time, and the third time the turn stops with a message instead of looping. A refusal also tells the model not to retry it or work around it.
 
 At the end of every message that changed files, the files are listed (`created`, `edited`, `deleted`) so a change the agent should not have made is easy to spot.
+
+## Check command
+
+A check is a command that proves the project still compiles. It runs after every change to a file (create, edit, insert, delete), and its verdict is added to the tool's result: `Check passed.`, or the first error lines (with their source excerpt, and paths starting at the project) when it fails. A model that wrote something wrong then hears about it at once.
+
+By default the command is **found for you** from the files in the project folder (only the top folder is looked at, and only a tool that is on the `PATH` is used). The first match wins:
+
+| Found in the project folder | Command |
+|---|---|
+| a `.slnx` or `.sln`, else a `.csproj`, `.fsproj` or `.vbproj` | `dotnet build "<file>" -v q --nologo` |
+| `go.mod` | `go build ./...` |
+| `Cargo.toml` | `cargo check --quiet --message-format short` |
+| `tsconfig.json`, with `node_modules` and a local `tsc` | `npx --no-install tsc --noEmit` |
+| `package.json` with a `typecheck`, `type-check` or `check` script, and `node_modules` | `npm run <script> --silent` |
+| `pyproject.toml`, `setup.py`, `setup.cfg`, `requirements.txt`, `Pipfile` or a `.py` file | `python -m compileall` over the project, skipping `.venv`, `venv`, `node_modules` and `.git`, with the bytecode written to a temporary folder so nothing is left in the project |
+| `pom.xml` | `mvn -q -B compile` |
+| `build.gradle(.kts)` or `settings.gradle(.kts)` | `gradlew -q classes` (the wrapper if there is one) or `gradle -q classes` |
+
+The command found is named when the program starts (`check: go build ./... (found for Go; ...)`); nothing is said when none is found. They are the quick kind (a build or a type check, not the tests). The first run of some of them can be slow (`go`, `cargo`, `mvn` and `gradle` download what they need), and a build can fail to write its output while the same project is open and running in an IDE.
+
+- Set `HOMUNCULUS_CHECK_COMMAND` to use your own command instead (a linter, a quicker build, a test subset).
+- Set it to `off` (or `none`, `false`, `no`, `0`, `disabled`) to run no check.
+- An edit to an existing file that breaks a passing build, or adds errors to a failing one, is undone: see `HOMUNCULUS_CHECK_REVERT`.
 
 ## Approvals
 
@@ -181,7 +204,7 @@ HOMUNCULUS_LOG_FILE=logs/homunculus.jsonl
 | `reply` | What was parsed: reasoning, content, tool-call names, token usage and milliseconds. |
 | `nudge`, `iteration_limit` | The reminder for an empty reply; the moment the limit asked you. |
 | `tool_call`, `tool_result` | Name and arguments; the result (truncated to 4000 characters). |
-| `check`, `change_undone` | Whether the check command passed after a change; which file an edit was undone for (only with `HOMUNCULUS_CHECK_COMMAND`). |
+| `check`, `change_undone` | Whether the check command passed after a change; which file an edit was undone for (only when a check is active). |
 
 The file contains your prompts and file contents, so keep it private (`*.jsonl` is git-ignored). The API key is never logged.
 
@@ -191,6 +214,7 @@ The file contains your prompts and file contents, so keep it private (`*.jsonl` 
 
 - `Agent`: send the conversation, run the requested tools, repeat until the model answers with text; asks at the iteration limit.
 - `ToolRunner`: runs one tool call if approved and turns failures into text the model can read.
+- `CheckDetector` and `CheckSelection`: find the check command for a project from the files in its folder, or take the one the user set.
 - `ChangeGuard`: with a check command set, runs it after every change to a file and undoes an edit that breaks the build.
 - `StaleReads`: keeps a small context window from filling up. A file the model read again, or that was changed after it was read, is replaced in the conversation by a one-line note, so each model call re-sends one copy instead of several.
 - `Llm/`: `ILanguageModel`; `OpenAiModel` (HTTP) and `OpenAiJson` (wire format) implement it for OpenAI-compatible servers. `TimedModel` and `MeteredModel` are decorators that wrap any model to record the time and the tokens of each call.

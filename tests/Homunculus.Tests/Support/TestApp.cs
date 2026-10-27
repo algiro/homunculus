@@ -9,11 +9,12 @@ public sealed class TestApp : IDisposable
 {
     private readonly App _app;
 
-    public TestApp(ILanguageModel model, string mode = "allow-all", ILanguageModel? judge = null, Settings? settings = null)
+    public TestApp(ILanguageModel model, string mode = "allow-all", ILanguageModel? judge = null, Settings? settings = null, CheckDetector? checks = null, IEnumerable<string>? projectFiles = null)
     {
         Project = new TempProject();
+        foreach (var file in projectFiles ?? []) Project.Write(file, "");
         Ui = new FakeUserInterface();
-        _app = new App(settings ?? DefaultSettings, Ui, Project.Location, model, judge ?? new ScriptedModel());
+        _app = new App(settings ?? DefaultSettings, Ui, Project.Location, model, judge ?? new ScriptedModel(), checks: checks);
         _app.Policy.TrySetMode(mode);
     }
 
