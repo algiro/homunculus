@@ -16,13 +16,18 @@ public sealed class Agent(
     IUserInterface ui,
     IEventLog? log = null,
     ChangedFiles? changes = null,
+    ReadFiles? reads = null,
     string? modelName = null)
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
 
     private const string Nudge = "You neither called a tool nor gave an answer. Call a tool now, or answer.";
 
-    public void ClearConversation() => conversation.Clear();
+    public void ClearConversation()
+    {
+        conversation.Clear();
+        reads?.Forget();
+    }
 
     public async Task RespondAsync(string input, CancellationToken cancellation)
     {

@@ -16,7 +16,9 @@ public sealed class ListFilesTool(ProjectDirectory project) : FileTool(project)
     protected override string Run(JsonElement arguments, string path)
     {
         if (!Directory.Exists(path))
-            throw new ToolException($"Not a directory: {path}");
+            throw new ToolException(File.Exists(path)
+                ? $"{Relative(path)} is a file, not a directory. Use read_file to read it."
+                : $"Not a directory: {path}");
 
         var entries = Directory.EnumerateFileSystemEntries(path)
             .Select(entry => Path.GetFileName(entry) + (Directory.Exists(entry) ? "/" : ""))
