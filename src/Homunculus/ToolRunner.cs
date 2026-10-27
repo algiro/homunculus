@@ -10,7 +10,8 @@ namespace Homunculus;
 /// Runs one tool call the model asked for, if approved. Failures the model can act on (a tool's own complaint, a missing file,
 /// a locked or forbidden path) become text it can read. Anything else is a bug in a tool, so it is not hidden and propagates.
 /// It also notices a model that keeps repeating the same failing call: the second time it is told so, the third time the agent stops.
-/// When the user set a check, it runs after every successful change to a file and its verdict is added to the tool's result.
+/// When the user set a check, the guard runs it after every successful change to a file, adds its verdict to the result, and
+/// may undo an edit that broke the build; an undone change counts as a failure of the call.
 /// </summary>
 public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInterface ui, IEventLog? log = null, string? root = null)
 {
@@ -48,12 +49,12 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
         try
         {
             // The approval may ask the user, so the progress shows only once the tool itself runs.
-            refusal = await approvals.CheckAsync(tool, call.Arguments, cancellation);
+            var refusal = await approvals.CheckAsync(tool, call.Arguments, cancellation);
             if (refusal is null)
             {
                 started = Stopwatch.GetTimestamp();
                 using (ui.ShowProgress("running"))
-                    result = await tool.RunAsync(call.Arguments, cancellation);
+                    result = await RunApprovedAsync(tool, call, cancellation);
                 if (tool.EffectOf(call.Arguments).Access == ToolAccess.Plan && result.Length > 0)
                     ui.Show(result);
                 _failures.Remove(KeyOf(call));
@@ -74,14 +75,22 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
         return result;
     }
 
-    private async Task<string> CheckAfterChangeAsync(ITool tool, ToolCall call, CancellationToken cancellation)
+    private async Task<string> RunApprovedAsync(ITool tool, ToolCall call, CancellationToken cancellation)
     {
-        if (check is null || tool.EffectOf(call.Arguments).Access is not (ToolAccess.Write or ToolAccess.Delete)) return "";
+        var snapshot = guard?.Before(tool, call.Arguments);
+        var result = await tool.RunAsync(call.Arguments, cancellation);
+        if (tool.EffectOf(call.Arguments).Access == ToolAccess.Plan && result.Length > 0)
+            ui.Show(result);
 
-        var outcome = await check.RunAsync(cancellation);
-        ui.Show(outcome.Passed ? "  check: passed" : "  check: failed");
-        _log.Write("check", new { call.Id, outcome.Passed });
-        return "\n\n" + outcome.Report;
+        if (guard is not null)
+        {
+            var verdict = await guard.AfterAsync(snapshot, tool, call.Arguments, result, cancellation);
+            if (verdict.Undone) return ShowFailure(call, verdict.Result);
+            result = verdict.Result;
+        }
+
+        _failures.Remove(KeyOf(call));
+        return result;
     }
 
     /// <summary>The model reads the failure as the tool's result; the user sees it too, so a later claim of success can be checked.</summary>

@@ -142,4 +142,16 @@ public class CheckAfterChangeTests
             project.Dispose();
         }
     }
+
+    [Test]
+    public async Task TheSystemPromptTellsTheModelWhereANewClassGoesAndWhatToCreateFirst()
+    {
+        var model = new ScriptedModel(Replies.Text("hi"));
+        _app = new TestApp(model);
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(model.LastConversation[0].Content,
+            Does.Contain("Put each new class in its own file, named after it, and create it before you register it"));
+    }
 }
