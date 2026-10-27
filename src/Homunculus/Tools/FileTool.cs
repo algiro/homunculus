@@ -18,6 +18,9 @@ public abstract class FileTool(ProjectDirectory project) : ITool
     public Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation) =>
         Task.FromResult(Run(arguments, PathOf(arguments)));
 
+    /// <summary>The path as the model writes it: relative to the project, with forward slashes.</summary>
+    protected string Relative(string fullPath) => Path.GetRelativePath(Project.Root, fullPath).Replace('\\', '/');
+
     protected virtual string PathOf(JsonElement arguments) => Project.Resolve(arguments.Text("path"));
 
     protected abstract string Run(JsonElement arguments, string path);

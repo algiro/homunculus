@@ -20,11 +20,12 @@ public sealed class App
     public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
     {
         Changes = new ChangedFiles(project);
+        Reads = new ReadFiles();
         Tools = new ToolRegistry(
         [
             new ListFilesTool(project),
-            new ReadFileTool(project),
-            new EditFileTool(project, Changes),
+            new ReadFileTool(project, Reads),
+            new EditFileTool(project, Changes, Reads),
             new DeleteFileTool(project, Changes),
             new RunCommandTool(project, settings.CommandTimeout, settings.Shell),
             new PlanTool(Plan),
@@ -39,7 +40,7 @@ public sealed class App
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, Changes);
 
         Runner = new ToolRunner(Tools, approvals, ui, log);
-        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log, Changes);
+        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log, Changes, Reads);
 
         var commands = new CommandRegistry();
         commands
@@ -55,6 +56,7 @@ public sealed class App
 
     public UsageLedger Usage { get; } = new();
     public ChangedFiles Changes { get; }
+    public ReadFiles Reads { get; }
     public TimeLedger Time { get; } = new();
     public Plan Plan { get; } = new();
     public ToolRegistry Tools { get; }
