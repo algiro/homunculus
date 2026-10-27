@@ -1,3 +1,5 @@
+using Homunculus.Tools;
+
 namespace Homunculus;
 
 public sealed record Settings(

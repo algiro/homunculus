@@ -36,4 +36,16 @@ public class ShellTests
         Assert.That(shell.Executable, Is.EqualTo("/bin/sh"));
         Assert.That(shell.Arguments, Is.EqualTo(new[] { "-c" }));
     }
+
+    [TestCase("pwsh", "pwsh.exe")]
+    [TestCase("powershell", "powershell.exe")]
+    [TestCase("cmd", "cmd.exe")]
+    [TestCase("sh", "sh")]
+    [TestCase("PowerShell.EXE", "powershell.exe")]
+    [TestCase(" cmd ", "cmd.exe")]
+    public void FindsAShellByName(string name, string executable) =>
+        Assert.That(Shell.Named(name)!.Executable, Is.EqualTo(executable));
+
+    [Test]
+    public void KnowsNoShellOfThatName() => Assert.That(Shell.Named("fish"), Is.Null);
 }

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -141,7 +142,14 @@ var info = new ProcessStartInfo(_shell.Executable);
         };
 foreach (var argument in _shell.Arguments) info.ArgumentList.Add(argument);
 info.ArgumentList.Add(command);
-        return Process.Start(info)!;
+try
+{
+    return Process.Start(info)!;
+}
+catch (Win32Exception e)
+{
+    throw new ToolException($"Cannot start {_shell.Name}: {e.Message}");
+}
     }
 
     private static void Append(StringBuilder output, string? line)
