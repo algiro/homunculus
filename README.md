@@ -4,7 +4,7 @@
 
 # homunculus
 
-A tiny coding agent in plain .NET 10: a loop, nine tools, and a language model. No AI libraries, no NuGet packages in the app.
+A tiny coding agent in plain .NET 10: a loop, ten tools, and a language model. No AI libraries, no NuGet packages in the app.
 
 > The name comes from the medieval alchemists' *homunculus*: a tiny artificial person brewed in a flask that does the work it is given. Here the flask is a language model and the little helper is a loop with six tools.
 
@@ -15,7 +15,7 @@ Inspired by [konacode](https://github.com/bbossola/konacode).
 ## What it does today
 
 - **Agent loop:** sends the conversation to the model, runs the tools it asks for, and repeats until the model answers with text.
-- **Nine tools:** list, find (`glob`), search (`grep`), read, edit, insert into and delete files, run a program (no shell), and record a plan ([details](#tools)).
+- **Ten tools:** list, find (`glob`), search (`grep`), read, create (`write_file`), edit, insert into and delete files, run a program (no shell), and record a plan ([details](#tools)).
 - **Any OpenAI-compatible server:** OpenAI itself, or a local model through Ollama and similar ([example](#using-a-local-model)).
 - **Approvals:** file access outside the project folder, and any program not on the allowed list, always ask you; other commands follow a selectable mode, including a second "judge" model, shown in the prompt ([details](#approvals)).
 - **Reasoning:** the thinking that reasoning models report is shown in gray with a `[thinking]` prefix on every line (can be turned off).
@@ -103,8 +103,8 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_SHELL` | detected: PowerShell 7, else Windows PowerShell, else `cmd.exe` on Windows, `sh` elsewhere; set `pwsh`, `powershell`, `cmd` or `sh` to force one |
 | `HOMUNCULUS_REASONING_EFFORT` | not sent; `none`, `low`, `medium` or `high` is sent as `reasoning_effort` to the agent model. `none` turns thinking off on servers that support it (Ollama does), which makes small reasoning models much faster |
 | `HOMUNCULUS_JUDGE_REASONING_EFFORT` | not sent; the same for the judge model. Leave it unset for small models: without thinking they tend to answer `deny` to routine commands such as `dotnet test` |
-| `HOMUNCULUS_CHECK_COMMAND` | none; a command line such as `dotnet build --no-restore -v q` that proves the project still works. It runs after every change to a file (create, edit, insert, delete) and its verdict is added to the tool result: `Check passed.`, or the first error lines (paths start at the project) when it fails. The agent model then fixes mistakes at once. Runs with the same shell and time limit as `run_command`; you see `check: passed` or `check: failed` on screen. An edit to an existing file the agent did not create that turns a passing build into a failing one is undone (see `HOMUNCULUS_CHECK_REVERT`) |
-| `HOMUNCULUS_CHECK_REVERT` | `true`; with a check command, `false` only reports a failing check and keeps the edit. Undoing costs one extra check run, and only when a check fails: the file is put back, the check runs again, and the undo stays only if the build recovers. Files the agent created itself, new files and deletions are never undone |
+| `HOMUNCULUS_CHECK_COMMAND` | none; a command line such as `dotnet build --no-restore -v q` that proves the project still works. It runs after every change to a file (create, edit, insert, delete) and its verdict is added to the tool result: `Check passed.`, or the first error lines (paths start at the project) when it fails. The agent model then fixes mistakes at once. Runs with the same shell and time limit as `run_command`; you see `check: passed` or `check: failed` on screen. An edit to an existing file the agent did not create that turns a passing build into a failing one, or adds errors to a build that was already failing, is undone (see `HOMUNCULUS_CHECK_REVERT`) |
+| `HOMUNCULUS_CHECK_REVERT` | `true`; with a check command, `false` only reports a failing check and keeps the edit. Undoing costs one extra check run, and only when a check fails: the file is put back and the check runs again. The undo stays if the build recovers, or if the edit had added errors the project did not have (errors are compared without their line numbers, and a build's totals line is ignored); otherwise the edit is put back. Files the agent created itself, new files and deletions are never undone |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
 
@@ -143,10 +143,11 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `glob` | Finds files by name pattern (`**/*.cs`, `src/**/Version*.cs`, `*.{cs,csproj}`); a pattern without `/` matches in any folder. At most 200 results; skips `bin`, `obj`, `.git`, `.vs`, `.idea` and `node_modules`. |
 | `grep` | Searches file contents with a regular expression and returns `file:line: text` (at most 200). Optional `path` (a folder or a file) and `include` (a name pattern such as `*.cs`). Skips the same folders plus logs (`*.log`, `*.jsonl`, `logs/`) and binary or very large files. |
 | `read_file` | Reads a text file (at most 100,000 characters). Given a directory, it says to use `list_files`. |
-| `edit_file` | Replaces the one exact occurrence of a text in a file (refusing an edit whose old and new text are identical), or creates a new file when the old text is empty. When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. Pointing it at a directory says so too, and a new file gets a reminder to read the files it builds on first: the unread files of the same kind (same extension) named after a name its code uses (`ICommand` for `: ICommand`) in its folder or above, else any unread neighbour. |
+| `write_file` | Creates a new file with the whole content you give it, and any missing folders. It refuses a file that already exists (the answer points to `edit_file` and `insert_lines`), so it can never overwrite. Like a new file made with `edit_file`, it reminds the model of the unread files its code builds on. |
+| `edit_file` | Replaces the one exact occurrence of a text in a file (refusing an edit whose old and new text are identical), or creates a new file when the old text is empty (`write_file` is simpler for that). When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. Pointing it at a directory says so too, and a new file gets a reminder to read the files it builds on first: the unread files of the same kind (same extension) named after a name its code uses (`ICommand` for `: ICommand`) in its folder or above, else any unread neighbour. |
 | `insert_lines` | Inserts lines before or after an existing line (`line`; `position` is `after` by default), for example to register something next to its siblings. The line is matched ignoring indentation, the new lines take its indentation, the file's line endings are kept, and the result shows the lines around the insertion. An anchor can also be several consecutive lines (the text goes after the last one, or before the first). An anchor that is not in the file gets the closest real line; one that matches several places gets their line numbers. |
 | `delete_file` | Deletes a file. Directories are refused. Deleting a file the agent did not create itself in this session is always put to you first. |
-| `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. |
+| `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. The tool description tells the model which shell and operating system it got. Its description tells the model not to create or edit files with it, since those changes would escape the check, the undo and the end-of-turn list. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
 
 Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened. If the model repeats the exact same failing or refused call, it is told so the second time, and the third time the turn stops with a message instead of looping. A refusal also tells the model not to retry it or work around it.
@@ -194,8 +195,10 @@ The file contains your prompts and file contents, so keep it private (`*.jsonl` 
 
 - `Agent`: send the conversation, run the requested tools, repeat until the model answers with text; asks at the iteration limit.
 - `ToolRunner`: runs one tool call if approved and turns failures into text the model can read.
+- `ChangeGuard`: with a check command set, runs it after every change to a file and undoes an edit that breaks the build.
+- `StaleReads`: keeps a small context window from filling up. A file the model read again, or that was changed after it was read, is replaced in the conversation by a one-line note, so each model call re-sends one copy instead of several.
 - `Llm/`: `ILanguageModel`; `OpenAiModel` (HTTP) and `OpenAiJson` (wire format) implement it for OpenAI-compatible servers. `TimedModel` and `MeteredModel` are decorators that wrap any model to record the time and the tokens of each call.
-- `Tools/`: `ITool` and the nine tools. A tool describes what a call does with `ToolEffect`. A new tool is one class and one line in `App`.
+- `Tools/`: `ITool` and the ten tools. A tool describes what a call does with `ToolEffect`. A new tool is one class and one line in `App`.
 - `Policy/`: `ProjectBoundaryPolicy` lets file access inside the project run freely; `Approvals` asks you for anything outside it and whenever a policy is unsure; `SwitchablePolicy` holds the three command modes.
 - `Commands/`: one small `ICommand` class per slash command. A new command is one class and one line in `App`.
 - `Logging/`: `IEventLog` and the JSONL file writer behind the debug log.

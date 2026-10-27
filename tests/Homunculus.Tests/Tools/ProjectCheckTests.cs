@@ -107,7 +107,9 @@ public class ProjectCheckTests
 
         var result = await _check.RunAsync(CancellationToken.None);
 
-        Assert.That(result, Is.EqualTo(new CheckResult(false, "Check `dotnet build` did not finish: Command timed out after 60 seconds.")));
+        Assert.That(result.Passed, Is.False);
+        Assert.That(result.DidNotFinish, Is.True);
+        Assert.That(result.Report, Is.EqualTo("Check `dotnet build` did not finish: Command timed out after 60 seconds."));
     }
 
     [Test]
@@ -116,5 +118,60 @@ public class ProjectCheckTests
         _runner.Failure = new OperationCanceledException();
 
         Assert.CatchAsync<OperationCanceledException>(() => _check.RunAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task KeepsEachErrorWithoutItsPositionSoMovedErrorsMatch()
+    {
+        Prints("src\\App.cs(5,1): error CS1002: ; expected\nmain.c:12:5: error: expected ';'\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors.Select(error => error.Key), Is.EqualTo(new[]
+        {
+            "src\\App.cs: error CS1002: ; expected",
+            "main.c: error: expected ';'",
+        }));
+        Assert.That(result.Errors[0].Line, Is.EqualTo("src\\App.cs(5,1): error CS1002: ; expected"));
+    }
+
+    [Test]
+    public async Task GivesTheSameKeyToTheSameErrorAtAnotherLine()
+    {
+        Prints("App.cs(5,1): error CS1002: ; expected\n", 1);
+        var first = await _check.RunAsync(CancellationToken.None);
+        Prints("App.cs(9,3): error CS1002: ; expected\n", 1);
+        var second = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(second.Errors[0].Key, Is.EqualTo(first.Errors[0].Key));
+    }
+
+    [Test]
+    public async Task HasNoErrorsWhenTheOutputNamesNone()
+    {
+        Prints("3 tests failed\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors, Is.Empty);
+        Assert.That(result.DidNotFinish, Is.False);
+    }
+
+    [Test]
+    public async Task DoesNotTakeABuildsTotalsForAnError()
+    {
+        Prints("App.cs(5,1): error CS1002: ; expected\n    1 Error(s)\nBuild FAILED.\n    0 error(s)\nNo errors\n", 1);
+
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors.Select(error => error.Line), Is.EqualTo(new[] { "App.cs(5,1): error CS1002: ; expected" }));
+    }
+
+    [Test]
+    public async Task HasNoErrorsWhenItPasses()
+    {
+        var result = await _check.RunAsync(CancellationToken.None);
+
+        Assert.That(result.Errors, Is.Empty);
     }
 }

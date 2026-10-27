@@ -45,10 +45,26 @@ public class ChangeGuardTests
         _runner = new ToolRunner(tools, approvals, _ui, null, guard);
     }
 
-    private CommandOutcome BuildResult() =>
-        Directory.EnumerateFiles(_project.Root, "*.cs", SearchOption.AllDirectories).Any(file => File.ReadAllText(file).Contains("BROKEN"))
-            ? new CommandOutcome(Broken, 1)
-            : new CommandOutcome("", 0);
+    // One error per line that holds BROKEN (X) or WORSE (Y), reported at that line, as a compiler would.
+    private CommandOutcome BuildResult()
+    {
+        var errors = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(_project.Root, "*.cs", SearchOption.AllDirectories).Order())
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var name = Path.GetFileName(file);
+                if (lines[i].Contains("BROKEN")) errors.Add($"{name}({i + 1},1): error X: broken");
+                if (lines[i].Contains("WORSE")) errors.Add($"{name}({i + 1},1): error Y: worse");
+            }
+        }
+
+        if (errors.Count == 0) return new CommandOutcome("", 0);
+
+        errors.Add($"    {errors.Count} Error(s)");
+        return new CommandOutcome(string.Join('\n', errors), 1);
+    }
 
     private Task<string> Run(string tool, string json) =>
         _runner.RunAsync(new ToolCall("c1", tool, Json.Parse(json)), CancellationToken.None);
@@ -208,5 +224,90 @@ public class ChangeGuardTests
         await Run("edit_file", """{"path":"A.cs","old_str":"zzz","new_str":"x"}""");
 
         Assert.That(_commands.Commands, Is.Empty);
+    }
+
+    [Test]
+    public async Task UndoesAnEditThatAddsNewErrorsToABuildThatWasAlreadyBroken()
+    {
+        _project.Write("B.cs", "BROKEN");
+
+        var result = await Run("edit_file", """{"path":"A.cs","old_str":"good","new_str":"WORSE"}""");
+
+        Assert.That(_project.Read("A.cs"), Is.EqualTo("good"));
+        Assert.That(result, Is.EqualTo(
+            "Error: Not applied: this change added build errors that the project did not have before, so A.cs is back as it was. The new errors:\n" +
+            "A.cs(1,1): error Y: worse\nMake a change that adds no new errors."));
+        Assert.That(_commands.Commands, Has.Count.EqualTo(2));
+        Assert.That(_ui.Output, Does.Contain("  change undone"));
+    }
+
+    [Test]
+    public async Task ListsOnlyTheNewErrorsNotTheOnesTheProjectAlreadyHad()
+    {
+        _project.Write("B.cs", "BROKEN");
+
+        var result = await Run("edit_file", """{"path":"A.cs","old_str":"good","new_str":"WORSE"}""");
+
+        Assert.That(result, Does.Not.Contain("B.cs"));
+    }
+
+    [Test]
+    public async Task KeepsAnEditThatLeavesTheOldErrorsAsTheyWereEvenWhenTheyMoveToAnotherLine()
+    {
+        _project.Write("B.cs", "BROKEN");
+
+        var result = await Run("edit_file", """{"path":"B.cs","old_str":"BROKEN","new_str":"// moved down\nBROKEN"}""");
+
+        Assert.That(_project.Read("B.cs"), Is.EqualTo("// moved down\nBROKEN"), "the same error at another line is not a new error");
+        Assert.That(result, Does.StartWith("Edited").And.Contain("Check `build` failed"));
+    }
+
+    [Test]
+    public async Task UndoesAnEditThatBreaksADifferentFileWhileTheBuildWasAlreadyFailing()
+    {
+        _project.Write("B.cs", "BROKEN");
+        _project.Write("C.cs", "fine");
+
+        var result = await Run("edit_file", """{"path":"C.cs","old_str":"fine","new_str":"BROKEN"}""");
+
+        Assert.That(_project.Read("C.cs"), Is.EqualTo("fine"));
+        Assert.That(result, Does.StartWith("Error: Not applied: this change added build errors"));
+    }
+
+    [Test]
+    public async Task KeepsTheEditWhenTheRecheckCouldNotFinish()
+    {
+        var calls = 0;
+        _commands.Respond = () => ++calls == 1 ? new CommandOutcome("A.cs(1,1): error Y: worse", 1) : throw new ToolException("timed out");
+
+        var result = await Run("edit_file", """{"path":"A.cs","old_str":"good","new_str":"WORSE"}""");
+
+        Assert.That(_project.Read("A.cs"), Is.EqualTo("WORSE"), "no proof that the edit was the cause");
+        Assert.That(result, Does.StartWith("Edited"));
+    }
+
+    [Test]
+    public async Task KeepsAnEditThatFixesOneOfSeveralOldErrorsEvenThoughTheTotalChanges()
+    {
+        _project.Write("B.cs", "BROKEN");
+        _project.Write("C.cs", "BROKEN");
+
+        var result = await Run("edit_file", """{"path":"C.cs","old_str":"BROKEN","new_str":"fixed"}""");
+
+        Assert.That(_project.Read("C.cs"), Is.EqualTo("fixed"), "the total line says 1 Error(s) instead of 2, which is good news");
+        Assert.That(result, Does.StartWith("Edited"));
+        Assert.That(_ui.Output, Does.Not.Contain("  change undone"));
+    }
+
+    [Test]
+    public async Task DoesNotUndoWhenTheFirstCheckCouldNotFinish()
+    {
+        _commands.Respond = () => throw new ToolException("timed out");
+
+        var result = await Run("edit_file", """{"path":"A.cs","old_str":"good","new_str":"WORSE"}""");
+
+        Assert.That(_project.Read("A.cs"), Is.EqualTo("WORSE"));
+        Assert.That(result, Does.Contain("did not finish"));
+        Assert.That(_commands.Commands, Has.Count.EqualTo(1));
     }
 }

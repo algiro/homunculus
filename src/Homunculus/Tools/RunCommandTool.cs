@@ -33,7 +33,8 @@ public JsonObject Parameters => Schema.Of(Parameter.Required("command", "The com
 
     public string Description =>
     $"Run a command line with {_runner.Shell.Name} in the project directory ({RuntimeInformation.OSDescription}) " +
-    $"and return its output and exit code. Use only syntax that {_runner.Shell.Name} understands.";
+    $"and return its output and exit code. Use only syntax that {_runner.Shell.Name} understands. " +
+    "Do not use it to create or edit files: write_file, edit_file and insert_lines do that, and their changes are checked and tracked.";
 public JsonObject Parameters => Schema.Of(Parameter.Required("command", "The command line to run."));
 
     public JsonObject Parameters => new()
