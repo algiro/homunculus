@@ -17,15 +17,16 @@ public class ToolRegistryTests
     public void ReturnsNullForUnknownTools() => Assert.That(_app.Tools.Find("nope"), Is.Null);
 
     [Test]
-    public void OffersTheThreeTools() =>
-        Assert.That(_app.Tools.All.Select(t => t.Name), Is.EquivalentTo(new[] { "list_files", "glob", "read_file" }));
+    public void OffersTheSevenTools() =>
+        Assert.That(_app.Tools.All.Select(t => t.Name), Is.EquivalentTo(
+            new[] { "list_files", "glob", "grep", "read_file", "edit_file", "write_file", "insert_lines" }));
 
     [Test]
     public void DescribesEveryToolForTheModel()
     {
         var specs = _app.Tools.Specs();
 
-        Assert.That(specs, Has.Count.EqualTo(3));
+        Assert.That(specs, Has.Count.EqualTo(7));
         Assert.That(specs, Has.All.Matches<Homunculus.Llm.ToolSpec>(s =>
             s.Description.Length > 0 && s.Parameters["type"]!.GetValue<string>() == "object"));
     }
@@ -33,11 +34,11 @@ public class ToolRegistryTests
     [Test]
     public void MarksRequiredParameters()
     {
-        var read = _app.Tools.Specs().Single(s => s.Name == "read_file");
+        var edit = _app.Tools.Specs().Single(s => s.Name == "edit_file");
 
-        var required = read.Parameters["required"]!.AsArray().Select(n => n!.GetValue<string>());
+        var required = edit.Parameters["required"]!.AsArray().Select(n => n!.GetValue<string>());
 
-        Assert.That(required, Is.EqualTo(new[] { "path" }));
+        Assert.That(required, Is.EqualTo(new[] { "path", "old_str", "new_str" }));
     }
 
     [Test]

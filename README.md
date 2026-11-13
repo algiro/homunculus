@@ -4,18 +4,18 @@
 
 # homunculus
 
-## Demo step 2 of 5: the first tools
+## Demo step 3 of 5: changing files
 
-This branch is the second step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
-New since step 1: **tools**, read-only for now: `list_files`, `glob` and `read_file`.
+This branch is the third step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
+New since step 2: `grep`, `edit_file`, `write_file` and `insert_lines`, and the helpers a small model needs to use them well.
 
-- The request now describes each tool (name, description, JSON schema); the model can answer with tool calls instead of text.
-- The agent becomes a loop: run the calls, send the results back, ask again, until the model answers with text.
-- The tool runner turns failures into text the model can read, and stops a model that repeats the same failing call.
-- Reads inside the project folder just run; anything outside it asks you first.
-- An iteration limit asks you whether to go on (`HOMUNCULUS_MAX_ITERATIONS`); `/tools` lists the tools, `HOMUNCULUS_TOOLS` picks some.
+- Writes inside the project run without asking; anything outside it still asks you.
+- After each turn you see which files were created or edited.
+- Edits refuse changes that change nothing and point to the closest matching line when the text to replace is not found.
+- A new file next to files the model has not read, or using types it has not read, earns a reminder to read them first.
+- Copies of a file that was read again or changed later are pruned from the conversation, to save a small context window.
 
-Try it: start it in a project folder and ask "What does this project do?"
+Try it: "Add a /version command that prints the version", then look at what it changed.
 
 The rest of this README describes the complete version.
 

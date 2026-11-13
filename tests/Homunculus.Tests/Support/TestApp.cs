@@ -21,6 +21,7 @@ public sealed class TestApp : IDisposable
     public TempProject Project { get; }
     public FakeUserInterface Ui { get; }
     public UsageLedger Usage => _app.Usage;
+    public ChangedFiles Changes => _app.Changes;
     public ToolRegistry Tools => _app.Tools;
     public ToolRunner Runner => _app.Runner;
     public Agent Agent => _app.Agent;

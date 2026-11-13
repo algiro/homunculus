@@ -19,20 +19,24 @@ public class SearchToolsAppTests
     }
 
     [Test]
-    public async Task TheModelCanFindFilesWithGlobWithoutAsking()
+    public async Task TheModelCanSearchTheProjectWithGrepAndGlobWithoutAsking()
     {
-        var model = Start(Replies.Tool("glob", """{"pattern":"*.cs"}"""), Replies.Text("found it"));
+        var model = Start(Replies.Tool("grep", """{"pattern":"ExitCommand"}""", "c1"),
+            Replies.Tool("glob", """{"pattern":"*.cs"}""", "c2"),
+            Replies.Text("found it"));
 
-        await _app.Agent.RespondAsync("where is the app?", CancellationToken.None);
+        await _app.Agent.RespondAsync("where is the exit command registered?", CancellationToken.None);
 
         Assert.That(_app.Ui.Questions, Is.Empty);
-        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("src/App.cs"));
+        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("src/App.cs:1: .Add(new ExitCommand());"));
+        Assert.That(model.Conversations[2][^1].Content, Is.EqualTo("src/App.cs"));
     }
 
-    [Test]
-    public async Task AsksBeforeSearchingOutsideTheProject()
+    [TestCase("grep", """{"pattern":"x","path":"../.."}""")]
+    [TestCase("glob", """{"pattern":"*","path":"../.."}""")]
+    public async Task AsksBeforeSearchingOutsideTheProject(string tool, string arguments)
     {
-        var model = Start(Replies.Tool("glob", """{"pattern":"*","path":"../.."}"""), Replies.Text("ok"));
+        var model = Start(Replies.Tool(tool, arguments), Replies.Text("ok"));
         _app.Ui.Answers('n');
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
@@ -44,29 +48,30 @@ public class SearchToolsAppTests
     [Test]
     public void CanBeChosenWithTheEnabledToolsSetting()
     {
-        _app = new TestApp(new ScriptedModel(), settings: TestApp.DefaultSettings with { EnabledTools = ["glob"] });
+        _app = new TestApp(new ScriptedModel(), settings: TestApp.DefaultSettings with { EnabledTools = ["grep", "glob"] });
 
-        Assert.That(_app.Tools.All.Select(tool => tool.Name), Is.EquivalentTo(new[] { "glob" }));
+        Assert.That(_app.Tools.All.Select(tool => tool.Name), Is.EquivalentTo(new[] { "grep", "glob" }));
     }
 
     [Test]
-    public async Task TheSystemPromptTellsTheModelToFindFilesInsteadOfGuessingPaths()
+    public async Task TheSystemPromptTellsTheModelToSearchInsteadOfGuessingPaths()
     {
         var model = Start(Replies.Text("hi"));
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
-        Assert.That(model.LastConversation[0].Content, Does.Contain("with glob instead of guessing a path"));
+        Assert.That(model.LastConversation[0].Content, Does.Contain("search with grep and glob").And.Contain("instead of guessing a path"));
     }
 
     [Test]
-    public async Task GlobIsDescribedToTheModel()
+    public async Task BothToolsAreDescribedToTheModel()
     {
         var model = Start(Replies.Text("hi"));
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
         var specs = model.ToolLists[0];
+        Assert.That(specs.Single(spec => spec.Name == "grep").Parameters["required"]!.AsArray().Select(n => n!.GetValue<string>()), Is.EqualTo(new[] { "pattern" }));
         Assert.That(specs.Single(spec => spec.Name == "glob").Parameters["properties"]!.AsObject().Select(p => p.Key), Is.EqualTo(new[] { "pattern", "path" }));
     }
 }

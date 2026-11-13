@@ -29,6 +29,20 @@ public class AppTests
     }
 
     [Test]
+    public async Task DoesNotWriteOutsideTheProjectWhenTheUserRefuses()
+    {
+        var model = new ScriptedModel(
+            Replies.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
+            Replies.Text("understood"));
+        _app = new TestApp(model);
+        _app.Ui.Answers('n');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.False);
+    }
+
+    [Test]
     public async Task AsksBeforeReadingOutsideTheProject()
     {
         var model = new ScriptedModel(
@@ -52,6 +66,20 @@ public class AppTests
         _app.Agent.RespondAsync("go", CancellationToken.None).GetAwaiter().GetResult();
 
         Assert.That(model.LastConversation[0].Content, Does.Contain(_app.Project.Location.Root));
+    }
+
+    [Test]
+    public async Task WritesOutsideTheProjectWhenTheUserAgrees()
+    {
+        var model = new ScriptedModel(
+            Replies.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
+            Replies.Text("done"));
+        _app = new TestApp(model);
+        _app.Ui.Answers('y');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.True);
     }
 
     [Test]

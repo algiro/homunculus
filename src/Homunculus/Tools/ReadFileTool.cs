@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 
 namespace Homunculus.Tools;
 
-public sealed class ReadFileTool(ProjectDirectory project) : FileTool(project)
+public sealed class ReadFileTool(ProjectDirectory project, ReadFiles? reads = null) : FileTool(project)
 {
     public const string ToolName = "read_file";
 
@@ -19,6 +19,8 @@ public sealed class ReadFileTool(ProjectDirectory project) : FileTool(project)
         if (!File.Exists(path))
             throw new ToolException($"File not found: {path}");
 
-        return File.ReadAllText(path).Truncate(Limits.OutputChars);
+        var text = File.ReadAllText(path).Truncate(Limits.OutputChars);
+        reads?.Read(path);
+        return text;
     }
 }

@@ -30,10 +30,18 @@ public class ProjectBoundaryPolicyTests
         Assert.That(await Evaluate(new ReadFileTool(_project.Location), """{"path":"a.txt"}"""), Is.EqualTo(Verdict.Allow));
 
     [Test]
+    public async Task AllowsWritesInsideTheProject() =>
+        Assert.That(await Evaluate(new EditFileTool(_project.Location), """{"path":"src/a.txt"}"""), Is.EqualTo(Verdict.Allow));
+
+    [Test]
     public async Task AllowsListingTheProjectRoot() =>
         Assert.That(await Evaluate(new ListFilesTool(_project.Location), "{}"), Is.EqualTo(Verdict.Allow));
 
     [Test]
     public async Task AsksTheWrappedPolicyForReadsOutsideTheProject() =>
         Assert.That(await Evaluate(new ReadFileTool(_project.Location), """{"path":"../secret.txt"}"""), Is.EqualTo(Verdict.Deny));
+
+    [Test]
+    public async Task AsksTheWrappedPolicyForWritesOutsideTheProject() =>
+        Assert.That(await Evaluate(new EditFileTool(_project.Location), """{"path":"../secret.txt"}"""), Is.EqualTo(Verdict.Deny));
 }

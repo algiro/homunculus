@@ -68,7 +68,7 @@ public class ReplTests
     {
         await Run(new ScriptedModel(), "/tools");
 
-        Assert.That(_app.Ui.AllOutput, Does.Contain("list_files").And.Contain("glob").And.Contain("read_file"));
+        Assert.That(_app.Ui.AllOutput, Does.Contain("read_file").And.Contain("edit_file").And.Contain("insert_lines"));
     }
 
     [Test]

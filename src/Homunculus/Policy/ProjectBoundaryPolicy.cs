@@ -3,7 +3,7 @@ using Homunculus.Tools;
 
 namespace Homunculus.Policy;
 
-/// <summary>Reads inside the project never need this policy's approval; everything else is up to the wrapped policy.</summary>
+/// <summary>Reads and writes inside the project never need this policy's approval; everything else is up to the wrapped policy.</summary>
 public sealed class ProjectBoundaryPolicy(ProjectDirectory project, IPolicy inner) : IPolicy
 {
     public Task<Verdict> EvaluateAsync(ITool tool, JsonElement arguments, CancellationToken cancellation) =>
