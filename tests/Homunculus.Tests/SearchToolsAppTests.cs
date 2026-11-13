@@ -10,10 +10,10 @@ public class SearchToolsAppTests
 
     [TearDown] public void TearDown() => _app.Dispose();
 
-    private ScriptedModel Start(params Message[] script)
+    private ScriptedModel Start(string mode, params Message[] script)
     {
         var model = new ScriptedModel(script);
-        _app = new TestApp(model);
+        _app = new TestApp(model, mode);
         _app.Project.Write("src/App.cs", ".Add(new ExitCommand());\n");
         return model;
     }
@@ -21,7 +21,8 @@ public class SearchToolsAppTests
     [Test]
     public async Task TheModelCanSearchTheProjectWithGrepAndGlobWithoutAsking()
     {
-        var model = Start(Replies.Tool("grep", """{"pattern":"ExitCommand"}""", "c1"),
+        var model = Start("effect",
+            Replies.Tool("grep", """{"pattern":"ExitCommand"}""", "c1"),
             Replies.Tool("glob", """{"pattern":"*.cs"}""", "c2"),
             Replies.Text("found it"));
 
@@ -34,9 +35,9 @@ public class SearchToolsAppTests
 
     [TestCase("grep", """{"pattern":"x","path":"../.."}""")]
     [TestCase("glob", """{"pattern":"*","path":"../.."}""")]
-    public async Task AsksBeforeSearchingOutsideTheProject(string tool, string arguments)
+    public async Task AsksBeforeSearchingOutsideTheProjectInEveryMode(string tool, string arguments)
     {
-        var model = Start(Replies.Tool(tool, arguments), Replies.Text("ok"));
+        var model = Start("allow-all", Replies.Tool(tool, arguments), Replies.Text("ok"));
         _app.Ui.Answers('n');
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
@@ -50,13 +51,13 @@ public class SearchToolsAppTests
     {
         _app = new TestApp(new ScriptedModel(), settings: TestApp.DefaultSettings with { EnabledTools = ["grep", "glob"] });
 
-        Assert.That(_app.Tools.All.Select(tool => tool.Name), Is.EquivalentTo(new[] { "grep", "glob" }));
+        Assert.That(_app.Tools.All.Select(tool => tool.Name), Is.EquivalentTo(new[] { "grep", "glob", "plan" }));
     }
 
     [Test]
     public async Task TheSystemPromptTellsTheModelToSearchInsteadOfGuessingPaths()
     {
-        var model = Start(Replies.Text("hi"));
+        var model = Start("allow-all", Replies.Text("hi"));
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
@@ -66,7 +67,7 @@ public class SearchToolsAppTests
     [Test]
     public async Task BothToolsAreDescribedToTheModel()
     {
-        var model = Start(Replies.Text("hi"));
+        var model = Start("allow-all", Replies.Text("hi"));
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 

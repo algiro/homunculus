@@ -144,15 +144,16 @@ public class RepeatedFailureTests
     public async Task TheAgentAlsoStopsWhenTheUserRefusesTheSameCallThreeTimes()
     {
         var model = Start(
-            Replies.Tool("read_file", """{"path":"../secret.txt"}""", "c1"),
-            Replies.Tool("read_file", """{"path":"../secret.txt"}""", "c2"),
-            Replies.Tool("read_file", """{"path":"../secret.txt"}""", "c3"),
+            Replies.Tool("run_command", """{"command":"dotnet test"}""", "c1"),
+            Replies.Tool("run_command", """{"command":"dotnet test"}""", "c2"),
+            Replies.Tool("run_command", """{"command":"dotnet test"}""", "c3"),
             Replies.Text("never reached"));
+        _app.Policy.TrySetMode("effect");
         _app.Ui.Answers('n', 'n', 'n');
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
         Assert.That(model.Calls, Is.EqualTo(3));
-        Assert.That(_app.Ui.Output[^1], Does.StartWith("Stopped: the model made the same read_file call 3 times"));
+        Assert.That(_app.Ui.Output[^1], Does.StartWith("Stopped: the model made the same run_command call 3 times"));
     }
 }

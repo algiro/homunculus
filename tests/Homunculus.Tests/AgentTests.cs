@@ -22,9 +22,9 @@ public class AgentTests
 
     private Agent Build(ScriptedModel model, Verdict verdict = Verdict.Allow, IterationLimits? limits = null, bool showReasoning = true)
     {
-        var tools = new ToolRegistry([_echo]);
+        var tools = new ToolRegistry([_echo, new PlanTool()]);
         var runner = new ToolRunner(tools, new Approvals(new FixedPolicy(verdict), _ui), _ui);
-        return new Agent(model, new Conversation(SystemPrompt), tools, runner, limits ?? new IterationLimits(8), showReasoning, _ui);
+        return new Agent(model, new Conversation(SystemPrompt), tools, runner, limits ?? new IterationLimits(8, 24), showReasoning, _ui);
     }
 
     private static Task Ask(Agent agent, string input = "do it") => agent.RespondAsync(input, CancellationToken.None);
@@ -149,7 +149,7 @@ public class AgentTests
 
         Assert.That(model.LastConversation.Select(m => (m.Role, m.Content)),
             Is.EqualTo(new[] { (Role.System, (string?)SystemPrompt), (Role.User, "fix the bug") }));
-        Assert.That(model.ToolLists[0].Select(t => t.Name), Is.EquivalentTo(new[] { "echo" }));
+        Assert.That(model.ToolLists[0].Select(t => t.Name), Is.EquivalentTo(new[] { "echo", "plan" }));
     }
 
     [Test]
@@ -244,7 +244,7 @@ public class AgentTests
         var model = ScriptedModel.Repeating(Replies.Tool("echo"));
         _ui.Answers('n');
 
-        await Ask(Build(model, limits: new IterationLimits(3)));
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
         Assert.That(model.Calls, Is.EqualTo(3));
         Assert.That(_ui.Questions, Has.Count.EqualTo(1));
@@ -257,7 +257,7 @@ public class AgentTests
         var model = ScriptedModel.Repeating(Replies.Tool("echo"));
         _ui.Answers('y', 'y', 'n');
 
-        await Ask(Build(model, limits: new IterationLimits(3)));
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
         Assert.That(model.Calls, Is.EqualTo(9));
         Assert.That(_ui.Questions, Has.Count.EqualTo(3));
@@ -268,7 +268,7 @@ public class AgentTests
     {
         var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("done"));
 
-        await Ask(Build(model, limits: new IterationLimits(3)));
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
 
         Assert.That(_ui.Questions, Is.Empty);
         Assert.That(_ui.Output[^1], Is.EqualTo("done"));
@@ -284,6 +284,18 @@ public class AgentTests
         Assert.That(model.Calls, Is.EqualTo(51));
         Assert.That(_ui.Questions, Is.Empty);
         Assert.That(_ui.Output[^1], Is.EqualTo("done"));
+    }
+
+    [Test]
+    public async Task AllowsMoreIterationsOnceAPlanWasMade()
+    {
+        var model = new ScriptedModel(
+            [Replies.Tool("plan", """{"steps":["a"]}"""), .. Enumerable.Repeat(Replies.Tool("echo"), 10)]);
+        _ui.Answers('n');
+
+        await Ask(Build(model, limits: new IterationLimits(3, 5)));
+
+        Assert.That(model.Calls, Is.EqualTo(5));
     }
 
     [Test]

@@ -4,18 +4,19 @@
 
 # homunculus
 
-## Demo step 3 of 5: changing files
+## Demo step 4 of 5: commands, guards and a judge
 
-This branch is the third step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
-New since step 2: `grep`, `edit_file`, `write_file` and `insert_lines`, and the helpers a small model needs to use them well.
+This branch is the fourth step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
+New since step 3: `run_command`, `delete_file` and `plan`, and the guards around them.
 
-- Writes inside the project run without asking; anything outside it still asks you.
-- After each turn you see which files were created or edited.
-- Edits refuse changes that change nothing and point to the closest matching line when the text to replace is not found.
-- A new file next to files the model has not read, or using types it has not read, earns a reminder to read them first.
-- Copies of a file that was read again or changed later are pruned from the conversation, to save a small context window.
+- **Policy modes** (`/policy`): `judge` (default) asks a second model whether a command is safe, `effect` asks you for every
+  command, `allow-all` runs everything. A judge's "no" is put to you, and you can overrule it. `HOMUNCULUS_JUDGE_MODEL` picks the judge.
+- Deleting a file the agent did not create in this session always asks you.
+- **Change guard:** after every change the project's check (build) runs (`HOMUNCULUS_CHECK_COMMAND`, or detected), and an edit
+  that breaks a passing build is undone.
+- `plan` records the steps of a bigger task (`/plan` shows them) and raises the iteration limit.
 
-Try it: "Add a /version command that prints the version", then look at what it changed.
+Try it: ask for a change and watch the check run after each edit; switch `/policy` and ask it to run the tests.
 
 The rest of this README describes the complete version.
 

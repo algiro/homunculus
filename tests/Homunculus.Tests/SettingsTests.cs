@@ -16,7 +16,10 @@ public class SettingsTests
         Assert.That(settings.ApiKey, Is.EqualTo("sk-1"));
         Assert.That(settings.BaseUrl, Is.EqualTo("https://api.openai.com/v1"));
         Assert.That(settings.Model, Is.EqualTo("qwen3:8b"));
+        Assert.That(settings.JudgeModel, Is.EqualTo("qwen3:8b"));
+        Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(600)));
         Assert.That(settings.Iterations.Normal, Is.EqualTo(16));
+        Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(32));
     }
 
     [Test]
@@ -33,13 +36,27 @@ public class SettingsTests
     }
 
     [Test]
+    public void TheJudgeModelFollowsTheModelUnlessSet()
+    {
+        var same = From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MODEL", "big"));
+        var different = From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MODEL", "big"), ("HOMUNCULUS_JUDGE_MODEL", "small"));
+
+        Assert.That(same.JudgeModel, Is.EqualTo("big"));
+        Assert.That(different.JudgeModel, Is.EqualTo("small"));
+    }
+
+    [Test]
     public void ReadsNumericOverrides()
     {
         var settings = From(
             ("OPENAI_API_KEY", "k"),
-            ("HOMUNCULUS_MAX_ITERATIONS", "3"));
+            ("HOMUNCULUS_MAX_ITERATIONS", "3"),
+            ("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", "5"),
+            ("HOMUNCULUS_COMMAND_TIMEOUT_SECONDS", "7"));
 
         Assert.That(settings.Iterations.Normal, Is.EqualTo(3));
+        Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(5));
+        Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(7)));
     }
 
     [TestCase("unlimited")]
@@ -48,9 +65,10 @@ public class SettingsTests
     [TestCase("0")]
     public void ReadsNoLimitForIterations(string value)
     {
-        var iterations = From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", value)).Iterations;
+        var iterations = From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_MAX_ITERATIONS", value), ("HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING", value)).Iterations;
 
-        Assert.That(iterations.Limit, Is.Null);
+        Assert.That(iterations.For(planned: false), Is.Null);
+        Assert.That(iterations.For(planned: true), Is.Null);
     }
 
     [Test]
@@ -82,4 +100,24 @@ public class SettingsTests
     [TestCase("", true)]
     public void ReadsTheShowReasoningSwitch(string value, bool expected) =>
         Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHOW_REASONING", value)).ShowReasoning, Is.EqualTo(expected));
+
+    [Test]
+    public void DetectsTheShellUnlessOneIsChosen() =>
+        Assert.That(From(("OPENAI_API_KEY", "k")).Shell, Is.Null);
+
+    [Test]
+    public void ReadsTheChosenShell() =>
+        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHELL", "cmd")).Shell!.Name, Is.EqualTo("cmd.exe"));
+
+    [Test]
+    public void IgnoresAnEmptyShellChoice() =>
+        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHELL", "")).Shell, Is.Null);
+
+    [Test]
+    public void RefusesAnUnknownShellAndNamesTheChoices()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHELL", "fish")));
+
+        Assert.That(error!.Message, Does.Contain("fish").And.Contain("pwsh, powershell, cmd or sh"));
+    }
 }

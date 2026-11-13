@@ -4,7 +4,7 @@ namespace Homunculus;
 
 /// <summary>
 /// The model calls one user message may take. At the limit the user decides whether to go on; each yes grants another
-/// full batch. Create one per message.
+/// full batch, and making a plan raises the batch size. Create one per message.
 /// </summary>
 public sealed class IterationBudget(IterationLimits limits, IUserInterface ui, IEventLog? log = null)
 {
@@ -15,9 +15,9 @@ public sealed class IterationBudget(IterationLimits limits, IUserInterface ui, I
     public int Used { get; private set; }
 
     /// <summary>Takes one more model call. False when the limit was reached and the user chose to stop.</summary>
-    public bool TryTakeTurn()
+    public bool TryTakeTurn(bool planned)
     {
-        if (limits.Limit is { } batch && Used >= batch + _extended)
+        if (limits.For(planned) is { } batch && Used >= batch + _extended)
         {
             _log.Write("iteration_limit", new { iteration = Used });
             if (ui.Choose($"Reached {Used} model calls for this message. Continue for {batch} more?", "yn") != 'y')

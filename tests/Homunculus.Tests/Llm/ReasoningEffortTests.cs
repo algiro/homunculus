@@ -60,4 +60,30 @@ public class ReasoningEffortTests
 
         Assert.That(JsonNode.Parse(handler.RequestBody)!["reasoning_effort"]!.GetValue<string>(), Is.EqualTo("low"));
     }
+
+    [Test]
+    public void TheJudgeDoesNotInheritTheAgentsEffort()
+    {
+        var settings = From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_REASONING_EFFORT", "none"));
+
+        Assert.That(settings.JudgeReasoningEffort, Is.Null);
+    }
+
+    [Test]
+    public void ReadsTheJudgesEffortOnItsOwn()
+    {
+        var settings = From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_JUDGE_REASONING_EFFORT", "Low"));
+
+        Assert.That(settings.JudgeReasoningEffort, Is.EqualTo("low"));
+        Assert.That(settings.ReasoningEffort, Is.Null);
+    }
+
+    [Test]
+    public void RefusesAnUnknownJudgeEffortAndNamesTheVariable()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_JUDGE_REASONING_EFFORT", "extreme")));
+
+        Assert.That(error!.Message, Does.StartWith("HOMUNCULUS_JUDGE_REASONING_EFFORT must be none, low, medium or high"));
+    }
 }

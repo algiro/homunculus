@@ -9,6 +9,7 @@ public class EditFileSafetyTests
     private TempProject _project = null!;
     private ChangedFiles _changes = null!;
     private EditFileTool _edit = null!;
+    private DeleteFileTool _delete = null!;
 
     [SetUp]
     public void SetUp()
@@ -16,6 +17,7 @@ public class EditFileSafetyTests
         _project = new TempProject();
         _changes = new ChangedFiles(_project.Location);
         _edit = new EditFileTool(_project.Location, _changes);
+        _delete = new DeleteFileTool(_project.Location, _changes);
     }
 
     [TearDown] public void TearDown() => _project.Dispose();
@@ -82,6 +84,16 @@ public class EditFileSafetyTests
     }
 
     [Test]
+    public async Task RecordsFilesItDeletes()
+    {
+        _project.Write("Old.cs", "x");
+
+        await _delete.RunAsync(Json.Parse("""{"path":"Old.cs"}"""), CancellationToken.None);
+
+        Assert.That(_changes.Summary(), Does.EndWith("deleted Old.cs"));
+    }
+
+    [Test]
     public void RecordsNothingWhenAnEditFails()
     {
         _project.Write("Old.cs", "one");
@@ -90,6 +102,10 @@ public class EditFileSafetyTests
 
         Assert.That(_changes.Summary(), Is.Null);
     }
+
+    [Test]
+    public void TellsTheModelThatDeletingNeedsTheUsersOk() =>
+        Assert.That(_delete.Description, Does.Contain("asked first").And.Contain("unless you created the file"));
 
     [Test]
     public void SaysWhenEveryQuotedLineExistsButNotAsOneBlock()

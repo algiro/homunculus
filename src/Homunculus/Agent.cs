@@ -52,12 +52,13 @@ public sealed class Agent(
         conversation.Add(Message.User(input));
         _log.Write("turn_start", new { input });
         var specs = tools.Specs();
+        var planned = false;
         var nudged = false;
         var cutOff = false;
         var budget = new IterationBudget(limits, ui, _log);
         runner.ForgetFailures();
 
-        while (budget.TryTakeTurn())
+        while (budget.TryTakeTurn(planned))
         {
             var reply = await model.CompleteAsync(conversation, specs, cancellation);
             if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
@@ -121,6 +122,7 @@ public sealed class Agent(
 
             foreach (var call in reply.Message.ToolCalls!)
             {
+                planned |= call.Name == PlanTool.ToolName;
                 var result = await runner.RunAsync(call, cancellation);
                 conversation.Add(Message.ToolResult(call.Id, result));
                 _stale.AfterCall(conversation, call, EffectOf(call), result);

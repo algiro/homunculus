@@ -9,7 +9,7 @@ public class ToolRunnerTests
 {
     private TestApp _app = null!;
 
-    private void Start() => _app = new TestApp(new ScriptedModel());
+    private void Start(string mode = "allow-all") => _app = new TestApp(new ScriptedModel(), mode);
 
     [TearDown] public void TearDown() => _app.Dispose();
 
@@ -33,6 +33,38 @@ public class ToolRunnerTests
         await Run("list_files", "{}");
 
         Assert.That(_app.Ui.Output.Single(), Does.Contain("list_files"));
+    }
+
+    [Test]
+    public async Task ShowsThePlanTheModelRecorded()
+    {
+        Start();
+
+        await Run("plan", """{"steps":["[x] read","[ ] edit"]}""");
+
+        Assert.That(_app.Ui.Output, Has.Count.EqualTo(2));
+        Assert.That(_app.Ui.Output[1], Is.EqualTo("1. [x] read\n2. [ ] edit"));
+    }
+
+    [Test]
+    public async Task DoesNotShowAnythingForAnEmptyPlan()
+    {
+        Start();
+
+        await Run("plan", """{"steps":[]}""");
+
+        Assert.That(_app.Ui.Output, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ShowsTheErrorInsteadOfAPlanWhenTheCallFails()
+    {
+        Start();
+
+        await Run("plan", "{}");
+
+        Assert.That(_app.Ui.Output, Has.Count.EqualTo(2));
+        Assert.That(_app.Ui.Output[1], Does.StartWith("  <- Error:"));
     }
 
     [Test]
@@ -75,10 +107,10 @@ public class ToolRunnerTests
     [Test]
     public async Task ReturnsTheRefusalWithoutRunningTheTool()
     {
-        Start();
+        Start("effect");
         _app.Ui.Answers('n');
 
-        var result = await Run("read_file", """{"path":"../outside.txt"}""");
+        var result = await Run("run_command", """{"command":"echo hi"}""");
 
         Assert.That(result, Does.StartWith("Refused by the user."));
     }
@@ -86,10 +118,10 @@ public class ToolRunnerTests
     [Test]
     public async Task TellsTheModelNotToRetryOrWorkAroundARefusal()
     {
-        Start();
+        Start("effect");
         _app.Ui.Answers('n');
 
-        var result = await Run("read_file", """{"path":"../outside.txt"}""");
+        var result = await Run("run_command", """{"command":"echo hi"}""");
 
         Assert.That(result, Does.Contain("Do not retry it or work around it").And.Contain("tell the user"));
     }
@@ -97,10 +129,10 @@ public class ToolRunnerTests
     [Test]
     public async Task DoesNotShowARefusalAsAnError()
     {
-        Start();
+        Start("effect");
         _app.Ui.Answers('n');
 
-        await Run("read_file", """{"path":"../outside.txt"}""");
+        await Run("run_command", """{"command":"echo hi"}""");
 
         Assert.That(_app.Ui.AllOutput, Does.Not.Contain("<-"));
     }
@@ -108,11 +140,11 @@ public class ToolRunnerTests
     [Test]
     public async Task WarnsTheModelThatKeepsAskingForWhatTheUserRefused()
     {
-        Start();
+        Start("effect");
         _app.Ui.Answers('n', 'n');
-        await Run("read_file", """{"path":"../outside.txt"}""");
+        await Run("run_command", """{"command":"echo hi"}""");
 
-        var second = await Run("read_file", """{"path":"../outside.txt"}""");
+        var second = await Run("run_command", """{"command":"echo hi"}""");
 
         Assert.That(second, Does.Contain("You already made this exact call"));
     }
@@ -135,7 +167,7 @@ public class ToolRunnerTests
         public string Name => "broken";
         public string Description => "Always fails with a bug.";
         public System.Text.Json.Nodes.JsonObject Parameters => Schema.Of();
-        public ToolEffect EffectOf(System.Text.Json.JsonElement arguments) => new(ToolAccess.Read);
+        public ToolEffect EffectOf(System.Text.Json.JsonElement arguments) => ToolEffect.Planning;
         public Task<string> RunAsync(System.Text.Json.JsonElement arguments, CancellationToken cancellation) =>
             throw new InvalidOperationException("bug");
     }
@@ -173,10 +205,10 @@ public class ToolRunnerTests
     [Test]
     public async Task DoesNotCallARefusalByTheUserAFailure()
     {
-        Start();
+        Start("effect");
         _app.Ui.Answers('n');
 
-        await Run("read_file", """{"path":"../outside.txt"}""");
+        await Run("run_command", """{"command":"echo hi"}""");
 
         Assert.That(_app.Ui.AllOutput, Does.Not.Contain("<-"));
     }

@@ -26,6 +26,9 @@ public class ProjectBoundaryPolicyTests
         _policy.EvaluateAsync(tool, Json.Parse(json), CancellationToken.None);
 
     [Test]
+    public async Task AllowsPlans() => Assert.That(await Evaluate(new PlanTool(), """{"steps":[]}"""), Is.EqualTo(Verdict.Allow));
+
+    [Test]
     public async Task AllowsReadsInsideTheProject() =>
         Assert.That(await Evaluate(new ReadFileTool(_project.Location), """{"path":"a.txt"}"""), Is.EqualTo(Verdict.Allow));
 
@@ -43,5 +46,18 @@ public class ProjectBoundaryPolicyTests
 
     [Test]
     public async Task AsksTheWrappedPolicyForWritesOutsideTheProject() =>
-        Assert.That(await Evaluate(new EditFileTool(_project.Location), """{"path":"../secret.txt"}"""), Is.EqualTo(Verdict.Deny));
+        Assert.That(await Evaluate(new DeleteFileTool(_project.Location), """{"path":"../secret.txt"}"""), Is.EqualTo(Verdict.Deny));
+
+    [Test]
+    public async Task AsksTheWrappedPolicyForCommands() =>
+        Assert.That(await Evaluate(new RunCommandTool(_project.Location, TimeSpan.FromSeconds(1)), """{"command":"echo hi"}"""),
+            Is.EqualTo(Verdict.Deny));
+
+    [Test]
+    public async Task DoesNotBotherTheWrappedPolicyForSafeCalls()
+    {
+        await Evaluate(new PlanTool(), """{"steps":[]}""");
+
+        await _inner.DidNotReceiveWithAnyArgs().EvaluateAsync(default!, default, default);
+    }
 }
