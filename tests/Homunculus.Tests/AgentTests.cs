@@ -107,6 +107,30 @@ public class AgentTests
     }
 
     [Test]
+    public async Task AsksForAShortAnswerOnceWhenAReplyIsCutOffAndKeepsItOut()
+    {
+        var model = new ScriptedModel(Replies.CutOff, Replies.Text("answer"));
+
+        await Ask(Build(model));
+
+        Assert.That(model.Calls, Is.EqualTo(2));
+        Assert.That(model.LastConversation.Select(m => m.Role), Is.EqualTo(new[] { Role.System, Role.User, Role.User }));
+        Assert.That(model.LastConversation[^1].Content, Does.Contain("cut off"));
+        Assert.That(_ui.Output[^1], Is.EqualTo("answer"));
+    }
+
+    [Test]
+    public async Task StopsWhenASecondReplyIsCutOff()
+    {
+        var model = new ScriptedModel(Replies.CutOff, Replies.CutOff);
+
+        await Ask(Build(model));
+
+        Assert.That(model.Calls, Is.EqualTo(2));
+        Assert.That(_ui.Output[^1], Does.StartWith("Stopped: the model's reply was cut off twice"));
+    }
+
+    [Test]
     public async Task GivesUpWhenTheModelReturnsNothingAgain()
     {
         var model = new ScriptedModel(Replies.Text(""), Replies.Text("   "));

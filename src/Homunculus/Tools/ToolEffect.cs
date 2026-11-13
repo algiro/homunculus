@@ -12,7 +12,8 @@ public enum ToolAccess { Plan, Read, Write, Delete, Command, Network }
 public readonly record struct ToolEffect(ToolAccess Access, string? Path = null, string? Program = null, string? Command = null)
 {
     public static ToolEffect Planning { get; } = new(ToolAccess.Plan);
-
     public static ToolEffect Running(string program, IReadOnlyList<string> arguments) =>
         new(ToolAccess.Command, Program: program, Command: JsonSerializer.Serialize<IEnumerable<string>>([program, .. arguments]));
+
+    public static ToolEffect Searching { get; } = new(ToolAccess.Network);
 }
