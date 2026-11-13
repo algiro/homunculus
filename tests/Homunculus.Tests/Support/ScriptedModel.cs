@@ -29,18 +29,15 @@ public sealed class ScriptedModel : ILanguageModel
     public TimeSpan? Elapsed { get; set; }
 
     public List<IReadOnlyList<Message>> Conversations { get; } = [];
-    public List<IReadOnlyList<ToolSpec>> ToolLists { get; } = [];
     public int Calls => Conversations.Count;
     public IReadOnlyList<Message> LastConversation => Conversations[^1];
 
     public Task<Reply> CompleteAsync(
         IConversation conversation,
-        IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         Conversations.Add(conversation.Messages.ToList());
-        ToolLists.Add(tools);
 
         var next = _script.Count > 0 ? _script.Dequeue() : _whenScriptEnds ?? throw new InvalidOperationException("The script has no more replies.");
         return Task.FromResult(new Reply(next, Usage, Reasoning, Elapsed, CutOff: ReferenceEquals(next, Replies.CutOff)));
