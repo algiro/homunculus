@@ -6,7 +6,7 @@ public interface IUserInterface
 {
     void Show(string text);
 
-    /// <summary>Shows the thinking a reasoning model reported before its answer or tool call.</summary>
+    /// <summary>Shows the thinking a reasoning model reported before its answer.</summary>
     void ShowReasoning(string reasoning);
 
     /// <summary>Shows what the model call that produced the last answer cost.</summary>

@@ -20,12 +20,11 @@ public sealed class OpenAiModel(HttpClient http, string model, IEventLog? log = 
 
     public async Task<Reply> CompleteAsync(
         IConversation conversation,
-        IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation)
     {
-        var request = OpenAiJson.BuildRequest(model, conversation, tools, reasoningEffort);
+        var request = OpenAiJson.BuildRequest(model, conversation, reasoningEffort);
 
-        _log.Write("llm_request", new { model, messages = conversation.Messages.Count, tools = tools.Count, requestChars = request.Length });
+        _log.Write("llm_request", new { model, messages = conversation.Messages.Count, requestChars = request.Length });
 
         var started = System.Diagnostics.Stopwatch.StartNew();
         string body;
