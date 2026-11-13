@@ -43,6 +43,6 @@ public sealed class ScriptedModel : ILanguageModel
         ToolLists.Add(tools);
 
         var next = _script.Count > 0 ? _script.Dequeue() : _whenScriptEnds ?? throw new InvalidOperationException("The script has no more replies.");
-        return Task.FromResult(new Reply(next, Usage, Reasoning, Elapsed));
+        return Task.FromResult(new Reply(next, Usage, Reasoning, Elapsed, CutOff: ReferenceEquals(next, Replies.CutOff)));
     }
 }

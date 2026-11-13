@@ -22,6 +22,10 @@ public sealed class Agent(
 
     private const string Nudge = "You neither called a tool nor gave an answer. Call a tool now, or answer.";
 
+    private const string CutOffNudge =
+        "Your last reply was cut off: you ran out of room before you finished. Do not think it all through again. " +
+        "Answer now in a few sentences from what you already have, or make one tool call.";
+
     public void ClearConversation()
     {
         conversation.Clear();
@@ -50,6 +54,7 @@ public sealed class Agent(
         var specs = tools.Specs();
         var planned = false;
         var nudged = false;
+        var cutOff = false;
         var budget = new IterationBudget(limits, ui, _log);
         runner.ForgetFailures();
 
@@ -68,7 +73,25 @@ public sealed class Agent(
                 toolCalls = reply.Message.ToolCalls?.Select(c => c.Name).ToArray(),
                 usage = reply.Usage,
                 ms = reply.Elapsed?.TotalMilliseconds,
+                cutOff = reply.CutOff,
             });
+
+            if (reply.CutOff)
+            {
+                // A small model can spend its whole context window thinking. The unfinished reply stays out of the
+                // conversation; the model gets one request to answer briefly from what it has.
+                if (cutOff)
+                {
+                    _log.Write("turn_end", new { reason = "cut_off_twice" });
+                    ui.Show("Stopped: the model's reply was cut off twice because it ran out of room. Try /clear, or ask a narrower question.");
+                    return;
+                }
+
+                _log.Write("cut_off", new { iteration = budget.Used - 1 });
+                cutOff = true;
+                conversation.Add(Message.User(CutOffNudge));
+                continue;
+            }
 
             if (IsEmpty(reply.Message))
             {

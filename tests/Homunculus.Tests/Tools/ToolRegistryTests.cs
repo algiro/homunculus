@@ -17,16 +17,16 @@ public class ToolRegistryTests
     public void ReturnsNullForUnknownTools() => Assert.That(_app.Tools.Find("nope"), Is.Null);
 
     [Test]
-    public void OffersTheTenTools() =>
+    public void OffersTheTwelveTools() =>
         Assert.That(_app.Tools.All.Select(t => t.Name), Is.EquivalentTo(
-            new[] { "list_files", "glob", "grep", "read_file", "edit_file", "write_file", "insert_lines", "delete_file", "run_command", "plan" }));
+            new[] { "list_files", "glob", "grep", "read_file", "edit_file", "write_file", "insert_lines", "delete_file", "run_command", "plan", "web_search", "web_fetch" }));
 
     [Test]
     public void DescribesEveryToolForTheModel()
     {
         var specs = _app.Tools.Specs();
 
-        Assert.That(specs, Has.Count.EqualTo(10));
+        Assert.That(specs, Has.Count.EqualTo(12));
         Assert.That(specs, Has.All.Matches<Homunculus.Llm.ToolSpec>(s =>
             s.Description.Length > 0 && s.Parameters["type"]!.GetValue<string>() == "object"));
     }
