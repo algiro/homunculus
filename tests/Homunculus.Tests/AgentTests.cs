@@ -1,20 +1,31 @@
 using Homunculus.Llm;
+using Homunculus.Policy;
 using Homunculus.Tests.Support;
+using Homunculus.Tools;
 
 namespace Homunculus.Tests;
 
-/// <summary>The agent on its own: a scripted model and a fake user.</summary>
+/// <summary>The agent loop on its own: a scripted model, a fake tool and a fixed policy, with no project on disk.</summary>
 public class AgentTests
 {
     private const string SystemPrompt = "be brief";
 
+    private FakeTool _echo = null!;
     private FakeUserInterface _ui = null!;
 
     [SetUp]
-    public void SetUp() => _ui = new FakeUserInterface();
+    public void SetUp()
+    {
+        _echo = new FakeTool("echo");
+        _ui = new FakeUserInterface();
+    }
 
-    private Agent Build(ScriptedModel model, bool showReasoning = true) =>
-        new(model, new Conversation(SystemPrompt), showReasoning, _ui);
+    private Agent Build(ScriptedModel model, Verdict verdict = Verdict.Allow, IterationLimits? limits = null, bool showReasoning = true)
+    {
+        var tools = new ToolRegistry([_echo]);
+        var runner = new ToolRunner(tools, new Approvals(new FixedPolicy(verdict), _ui), _ui);
+        return new Agent(model, new Conversation(SystemPrompt), tools, runner, limits ?? new IterationLimits(8), showReasoning, _ui);
+    }
 
     private static Task Ask(Agent agent, string input = "do it") => agent.RespondAsync(input, CancellationToken.None);
 
@@ -32,7 +43,7 @@ public class AgentTests
     public async Task ShowsTheTokensOfTheLastCallAfterTheAnswer()
     {
         var usage = new TokenUsage(Input: 10, Output: 5, Total: 15);
-        var model = new ScriptedModel(Replies.Text(""), Replies.Text("done")) { Usage = usage };
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("done")) { Usage = usage };
 
         await Ask(Build(model));
 
@@ -130,7 +141,7 @@ public class AgentTests
     }
 
     [Test]
-    public async Task SendsTheSystemPromptAndTheUserMessage()
+    public async Task SendsTheSystemPromptTheUserMessageAndTheToolSpecs()
     {
         var model = new ScriptedModel(Replies.Text("ok"));
 
@@ -138,19 +149,85 @@ public class AgentTests
 
         Assert.That(model.LastConversation.Select(m => (m.Role, m.Content)),
             Is.EqualTo(new[] { (Role.System, (string?)SystemPrompt), (Role.User, "fix the bug") }));
+        Assert.That(model.ToolLists[0].Select(t => t.Name), Is.EquivalentTo(new[] { "echo" }));
     }
 
     [Test]
-    public async Task ShowsTheModelTimeAfterEveryCall()
+    public async Task RunsARequestedToolAndReturnsTheResultToTheModel()
     {
-        var model = new ScriptedModel(Replies.Text(""), Replies.Text("done"))
+        _echo.Result = "pong";
+        var model = new ScriptedModel(Replies.Tool("echo", """{"n":1}""", "c1"), Replies.Text("it said pong"));
+
+        await Ask(Build(model));
+
+        Assert.That(_echo.Calls.Single().GetProperty("n").GetInt32(), Is.EqualTo(1));
+        var toolMessage = model.Conversations[1][^1];
+        Assert.That((toolMessage.Role, toolMessage.ToolCallId, toolMessage.Content), Is.EqualTo((Role.Tool, "c1", (string?)"pong")));
+        Assert.That(_ui.Output[^1], Is.EqualTo("it said pong"));
+    }
+
+    [Test]
+    public async Task AnswersEveryToolCallOfOneReplyInOrder()
+    {
+        var model = new ScriptedModel(
+            Replies.Calls(
+                new ToolCall("a", "echo", Json.Parse("""{"n":1}""")),
+                new ToolCall("b", "echo", Json.Parse("""{"n":2}"""))),
+            Replies.Text("done"));
+
+        await Ask(Build(model));
+
+        Assert.That(_echo.Calls.Select(c => c.GetProperty("n").GetInt32()), Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(model.Conversations[1].Where(m => m.Role == Role.Tool).Select(m => m.ToolCallId), Is.EqualTo(new[] { "a", "b" }));
+    }
+
+    [Test]
+    public async Task KeepsGoingWhenTheModelAsksForAnUnknownTool()
+    {
+        var model = new ScriptedModel(Replies.Tool("fly"), Replies.Text("sorry"));
+
+        await Ask(Build(model));
+
+        Assert.That(model.Conversations[1][^1].Role, Is.EqualTo(Role.Tool));
+        Assert.That(_ui.Output[^1], Is.EqualTo("sorry"));
+    }
+
+    [Test]
+    public async Task KeepsGoingWhenAToolFails()
+    {
+        _echo.Failure = new ToolException("no good");
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("ok"));
+
+        await Ask(Build(model));
+
+        Assert.That(model.Conversations[1][^1].Content, Does.Contain("no good"));
+        Assert.That(_ui.Output[^1], Is.EqualTo("ok"));
+    }
+
+    [Test]
+    public async Task DoesNotRunAToolThePolicyDenies()
+    {
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("understood"));
+        _ui.Answers('n');
+
+        await Ask(Build(model, Verdict.Deny));
+
+        Assert.That(_echo.Calls, Is.Empty);
+        Assert.That(model.Conversations[1][^1].Role, Is.EqualTo(Role.Tool));
+        Assert.That(_ui.Output[^1], Is.EqualTo("understood"));
+    }
+
+    [Test]
+    public async Task ShowsTheModelTimeAfterEveryIteration()
+    {
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Tool("echo"), Replies.Text("done"))
         {
             Elapsed = TimeSpan.FromSeconds(4.2),
         };
 
         await Ask(Build(model));
 
-        Assert.That(_ui.Output.Count(line => line.EndsWith("model took 4.2s", StringComparison.Ordinal)), Is.EqualTo(2));
+        Assert.That(_ui.Output.Count(line => line.EndsWith("model took 4.2s", StringComparison.Ordinal)), Is.EqualTo(3));
     }
 
     [Test]
@@ -159,6 +236,54 @@ public class AgentTests
         await Ask(Build(new ScriptedModel(Replies.Text("done"))));
 
         Assert.That(_ui.AllOutput, Does.Not.Contain("model took"));
+    }
+
+    [Test]
+    public async Task AsksAtTheIterationLimitAndStopsWhenTheUserDeclines()
+    {
+        var model = ScriptedModel.Repeating(Replies.Tool("echo"));
+        _ui.Answers('n');
+
+        await Ask(Build(model, limits: new IterationLimits(3)));
+
+        Assert.That(model.Calls, Is.EqualTo(3));
+        Assert.That(_ui.Questions, Has.Count.EqualTo(1));
+        Assert.That(_ui.Output[^1], Does.Contain("iteration limit"));
+    }
+
+    [Test]
+    public async Task GrantsAnotherBatchEachTimeTheUserAgrees()
+    {
+        var model = ScriptedModel.Repeating(Replies.Tool("echo"));
+        _ui.Answers('y', 'y', 'n');
+
+        await Ask(Build(model, limits: new IterationLimits(3)));
+
+        Assert.That(model.Calls, Is.EqualTo(9));
+        Assert.That(_ui.Questions, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public async Task FinishesWithoutAskingWhenTheAnswerComesBeforeTheLimit()
+    {
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("done"));
+
+        await Ask(Build(model, limits: new IterationLimits(3)));
+
+        Assert.That(_ui.Questions, Is.Empty);
+        Assert.That(_ui.Output[^1], Is.EqualTo("done"));
+    }
+
+    [Test]
+    public async Task NeverAsksWithoutALimit()
+    {
+        var model = new ScriptedModel([.. Enumerable.Repeat(Replies.Tool("echo"), 50), Replies.Text("done")]);
+
+        await Ask(Build(model, limits: IterationLimits.Unlimited));
+
+        Assert.That(model.Calls, Is.EqualTo(51));
+        Assert.That(_ui.Questions, Is.Empty);
+        Assert.That(_ui.Output[^1], Is.EqualTo("done"));
     }
 
     [Test]

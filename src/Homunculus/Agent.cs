@@ -1,23 +1,27 @@
 using Homunculus.Llm;
 using Homunculus.Logging;
+using Homunculus.Tools;
 
 namespace Homunculus;
 
-/// <summary>The whole idea, at its simplest: add the user's message to the conversation, send it all to the model, show the answer.</summary>
+/// <summary>The whole idea: send the conversation, run any tool the model asks for, repeat until it answers with text.</summary>
 public sealed class Agent(
     ILanguageModel model,
     IConversation conversation,
+    ToolRegistry tools,
+    ToolRunner runner,
+    IterationLimits limits,
     bool showReasoning,
     IUserInterface ui,
     IEventLog? log = null)
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
 
-    private const string Nudge = "You gave no answer. Answer now.";
+    private const string Nudge = "You neither called a tool nor gave an answer. Call a tool now, or answer.";
 
     private const string CutOffNudge =
         "Your last reply was cut off: you ran out of room before you finished. Do not think it all through again. " +
-        "Answer now in a few sentences.";
+        "Answer now in a few sentences from what you already have, or make one tool call.";
 
     public void ClearConversation() => conversation.Clear();
 
@@ -25,23 +29,25 @@ public sealed class Agent(
     {
         conversation.Add(Message.User(input));
         _log.Write("turn_start", new { input });
+        var specs = tools.Specs();
         var nudged = false;
         var cutOff = false;
-        var calls = 0;
+        var budget = new IterationBudget(limits, ui, _log);
+        runner.ForgetFailures();
 
-        // Usually one model call. A reply that is empty or cut off earns the model one more try of each kind.
-        while (true)
+        while (budget.TryTakeTurn())
         {
-            var reply = await model.CompleteAsync(conversation, cancellation);
-            calls++;
+            var reply = await model.CompleteAsync(conversation, specs, cancellation);
             if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
             if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
 
+            // What the model said, as parsed, whether or not it is shown: text that comes with tool calls is never displayed.
             _log.Write("reply", new
             {
-                iteration = calls - 1,
+                iteration = budget.Used - 1,
                 reasoning = reply.Reasoning,
                 content = reply.Message.Content,
+                toolCalls = reply.Message.ToolCalls?.Select(c => c.Name).ToArray(),
                 usage = reply.Usage,
                 ms = reply.Elapsed?.TotalMilliseconds,
                 cutOff = reply.CutOff,
@@ -50,7 +56,7 @@ public sealed class Agent(
             if (reply.CutOff)
             {
                 // A small model can spend its whole context window thinking. The unfinished reply stays out of the
-                // conversation; the model gets one request to answer briefly.
+                // conversation; the model gets one request to answer briefly from what it has.
                 if (cutOff)
                 {
                     _log.Write("turn_end", new { reason = "cut_off_twice" });
@@ -58,14 +64,15 @@ public sealed class Agent(
                     return;
                 }
 
-                _log.Write("cut_off", new { iteration = calls - 1 });
+                _log.Write("cut_off", new { iteration = budget.Used - 1 });
                 cutOff = true;
                 conversation.Add(Message.User(CutOffNudge));
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(reply.Message.Content))
+            if (IsEmpty(reply.Message))
             {
+                // A reasoning model can end its turn after thinking about a tool call it never made.
                 // The empty message stays out of the conversation; the model gets one reminder.
                 if (nudged)
                 {
@@ -74,17 +81,39 @@ public sealed class Agent(
                     return;
                 }
 
-                _log.Write("nudge", new { iteration = calls - 1 });
+                _log.Write("nudge", new { iteration = budget.Used - 1 });
                 nudged = true;
                 conversation.Add(Message.User(Nudge));
                 continue;
             }
 
             conversation.Add(reply.Message);
-            ui.Show(reply.Message.Content);
-            if (reply.Usage is { } usage) ui.ShowUsage(usage);
-            _log.Write("turn_end", new { reason = "answer", iterations = calls });
-            return;
+
+            if (!reply.Message.HasToolCalls)
+            {
+                ui.Show(reply.Message.Content!);
+                if (reply.Usage is { } usage) ui.ShowUsage(usage);
+                _log.Write("turn_end", new { reason = "answer", iterations = budget.Used });
+                return;
+            }
+
+            foreach (var call in reply.Message.ToolCalls!)
+            {
+                var result = await runner.RunAsync(call, cancellation);
+                conversation.Add(Message.ToolResult(call.Id, result));
+            }
+
+            if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
+            {
+                _log.Write("turn_end", new { reason = "stuck", tool = stuck.Name });
+                ui.Show($"Stopped: the model made the same {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times and it failed or was refused each time. Tell it what to do differently.");
+                return;
+            }
         }
+
+        _log.Write("turn_end", new { reason = "iteration_limit" });
+        ui.Show("Stopped: iteration limit reached for this message.");
     }
+
+    private static bool IsEmpty(Message message) => !message.HasToolCalls && string.IsNullOrWhiteSpace(message.Content);
 }

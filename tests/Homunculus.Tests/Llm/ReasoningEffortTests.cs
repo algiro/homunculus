@@ -12,7 +12,7 @@ public class ReasoningEffortTests
     }
 
     private static JsonNode Request(string? effort) =>
-        JsonNode.Parse(OpenAiJson.BuildRequest("m", new Conversation("be brief"), effort))!;
+        JsonNode.Parse(OpenAiJson.BuildRequest("m", new Conversation("be brief"), [], effort))!;
 
     [Test]
     public void IsNotSetUnlessAsked() =>
@@ -56,7 +56,7 @@ public class ReasoningEffortTests
         var handler = new StubHttpHandler(System.Net.HttpStatusCode.OK, """{"choices":[{"message":{"role":"assistant","content":"hi"}}]}""");
         var model = new OpenAiModel(OpenAiModel.CreateClient("http://host/v1/", "k", handler), "m", reasoningEffort: "low");
 
-        await model.CompleteAsync(new Conversation("be brief"), CancellationToken.None);
+        await model.CompleteAsync(new Conversation("be brief"), [], CancellationToken.None);
 
         Assert.That(JsonNode.Parse(handler.RequestBody)!["reasoning_effort"]!.GetValue<string>(), Is.EqualTo("low"));
     }

@@ -74,7 +74,7 @@ public class JsonlEventLogTests
         using (var log = new JsonlEventLog(_path))
         {
             var client = OpenAiModel.CreateClient("http://host/v1/", "secret-key", new StubHttpHandler(HttpStatusCode.OK, reply));
-            await new OpenAiModel(client, "my-model", log).CompleteAsync(new FixedConversation([Message.User("hello")]), CancellationToken.None);
+            await new OpenAiModel(client, "my-model", log).CompleteAsync(new FixedConversation([Message.User("hello")]), [], CancellationToken.None);
         }
 
         var lines = Lines();
@@ -92,7 +92,7 @@ public class JsonlEventLogTests
         var client = OpenAiModel.CreateClient("http://host/v1/", "k", new StubHttpHandler(HttpStatusCode.BadGateway, "upstream down"));
         var model = new OpenAiModel(client, "m", log);
 
-        Assert.ThrowsAsync<ModelException>(() => model.CompleteAsync(new FixedConversation([Message.User("x")]), CancellationToken.None));
+        Assert.ThrowsAsync<ModelException>(() => model.CompleteAsync(new FixedConversation([Message.User("x")]), [], CancellationToken.None));
 
         Assert.That(Lines().Last().GetProperty("data").GetProperty("body").GetString(), Is.EqualTo("upstream down"));
     }
