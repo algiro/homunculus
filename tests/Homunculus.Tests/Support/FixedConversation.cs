@@ -9,7 +9,5 @@ public sealed class FixedConversation(IReadOnlyList<Message> messages) : IConver
 
     public void Add(Message message) => throw new NotSupportedException();
 
-    public void Replace(int index, Message message) => throw new NotSupportedException();
-
     public void Clear() => throw new NotSupportedException();
 }

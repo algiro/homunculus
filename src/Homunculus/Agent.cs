@@ -1,157 +1,93 @@
 using Homunculus.Llm;
 using Homunculus.Logging;
-using Homunculus.Tools;
 
 namespace Homunculus;
 
-/// <summary>The whole idea: send the conversation, run any tool the model asks for, repeat until it answers with text.</summary>
+/// <summary>The whole idea, at its simplest: add the user's message to the conversation, send it all to the model, show the answer.</summary>
 public sealed class Agent(
     ILanguageModel model,
     IConversation conversation,
-    ToolRegistry tools,
-    ToolRunner runner,
-    IterationLimits limits,
     bool showReasoning,
     IUserInterface ui,
-    IEventLog? log = null,
-    ChangedFiles? changes = null,
-    ReadFiles? reads = null)
+    IEventLog? log = null)
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
-    private readonly StaleReads _stale = new();
 
-    private const string Nudge = "You neither called a tool nor gave an answer. Call a tool now, or answer.";
-
-    private const string CutOffNudge =
-        "Your last reply was cut off: you ran out of room before you finished. Do not think it all through again. " +
-        "Answer now in a few sentences from what you already have, or make one tool call.";
-
-    public void ClearConversation()
-    {
-        conversation.Clear();
-        reads?.Forget();
-        _stale.Forget();
-    }
+    public void ClearConversation() => conversation.Clear();
 
     public async Task RespondAsync(string input, CancellationToken cancellation)
     {
-        changes?.StartTurn();
-        try
-        {
-            await RunTurnAsync(input, cancellation);
-        }
-        finally
-        {
-            // However the turn ended, the user sees which files it touched.
-            if (changes?.Summary() is { } summary) ui.Show(summary);
-        }
-    }
-
-    private async Task RunTurnAsync(string input, CancellationToken cancellation)
-    {
         conversation.Add(Message.User(input));
         _log.Write("turn_start", new { input });
-        var specs = tools.Specs();
-        var planned = false;
-        var nudged = false;
-        var cutOff = false;
-        var budget = new IterationBudget(limits, ui, _log);
-        runner.ForgetFailures();
+        var retried = new HashSet<Flaw>();
 
-        while (budget.TryTakeTurn(planned))
+        // Usually one model call. A flawed reply (cut off, or empty) earns the model one more try of each kind.
+        for (var iteration = 0; ; iteration++)
         {
-            var reply = await model.CompleteAsync(conversation, specs, cancellation);
-            if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
-            if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
+            var reply = await AskModelAsync(iteration, cancellation);
 
-            // What the model said, as parsed, whether or not it is shown: text that comes with tool calls is never displayed.
-            _log.Write("reply", new
+            if (FlawOf(reply) is { } flaw)
             {
-                iteration = budget.Used - 1,
-                reasoning = reply.Reasoning,
-                content = reply.Message.Content,
-                toolCalls = reply.Message.ToolCalls?.Select(c => c.Name).ToArray(),
-                usage = reply.Usage,
-                ms = reply.Elapsed?.TotalMilliseconds,
-                cutOff = reply.CutOff,
-            });
-
-            if (reply.CutOff)
-            {
-                // A small model can spend its whole context window thinking. The unfinished reply stays out of the
-                // conversation; the model gets one request to answer briefly from what it has.
-                if (cutOff)
+                // The flawed reply stays out of the conversation. Add returns false the second time: give up.
+                if (!retried.Add(flaw))
                 {
-                    _log.Write("turn_end", new { reason = "cut_off_twice" });
-                    ui.Show("Stopped: the model's reply was cut off twice because it ran out of room. Try /clear, or ask a narrower question.");
+                    _log.Write("turn_end", new { reason = flaw.GiveUpReason });
+                    ui.Show(flaw.GiveUpMessage);
                     return;
                 }
 
-                _log.Write("cut_off", new { iteration = budget.Used - 1 });
-                cutOff = true;
-                conversation.Add(Message.User(CutOffNudge));
-                continue;
-            }
-
-            if (IsEmpty(reply.Message))
-            {
-                // A reasoning model can end its turn after thinking about a tool call it never made.
-                // The empty message stays out of the conversation; the model gets one reminder.
-                if (nudged)
-                {
-                    _log.Write("turn_end", new { reason = "empty_after_nudge" });
-                    ui.Show("The model returned no answer.");
-                    return;
-                }
-
-                _log.Write("nudge", new { iteration = budget.Used - 1 });
-                nudged = true;
-                conversation.Add(Message.User(Nudge));
+                _log.Write(flaw.LogEvent, new { iteration });
+                conversation.Add(Message.User(flaw.Nudge));
                 continue;
             }
 
             conversation.Add(reply.Message);
-
-            if (!reply.Message.HasToolCalls)
-            {
-                ui.Show(reply.Message.Content!);
-                if (reply.Usage is { } usage) ui.ShowUsage(usage);
-                _log.Write("turn_end", new { reason = "answer", iterations = budget.Used });
-                return;
-            }
-
-            foreach (var call in reply.Message.ToolCalls!)
-            {
-                planned |= call.Name == PlanTool.ToolName;
-                var result = await runner.RunAsync(call, cancellation);
-                conversation.Add(Message.ToolResult(call.Id, result));
-                _stale.AfterCall(conversation, call, EffectOf(call), result);
-            }
-
-            if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
-            {
-                _log.Write("turn_end", new { reason = "stuck", tool = stuck.Name });
-                ui.Show($"Stopped: the model made the same {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times and it failed or was refused each time. Tell it what to do differently.");
-                return;
-            }
+            ui.Show(reply.Message.Content!);
+            if (reply.Usage is { } usage) ui.ShowUsage(usage);
+            _log.Write("turn_end", new { reason = "answer", iterations = iteration + 1 });
+            return;
         }
-
-        _log.Write("turn_end", new { reason = "iteration_limit" });
-        ui.Show("Stopped: iteration limit reached for this message.");
     }
 
-    /// <summary>What the call does to a file, or null when the call is not one the tools can describe.</summary>
-    private ToolEffect? EffectOf(ToolCall call)
+    /// <summary>One round trip: send the whole conversation, show what the model reports about it, log what it said.</summary>
+    private async Task<Reply> AskModelAsync(int iteration, CancellationToken cancellation)
     {
-        try
+        var reply = await model.CompleteAsync(conversation, cancellation);
+        if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
+        if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
+
+        _log.Write("reply", new
         {
-            return tools.Find(call.Name)?.EffectOf(call.Arguments);
-        }
-        catch (ToolException)
-        {
-            return null;
-        }
+            iteration,
+            reasoning = reply.Reasoning,
+            content = reply.Message.Content,
+            usage = reply.Usage,
+            ms = reply.Elapsed?.TotalMilliseconds,
+            cutOff = reply.CutOff,
+        });
+        return reply;
     }
 
-    private static bool IsEmpty(Message message) => !message.HasToolCalls && string.IsNullOrWhiteSpace(message.Content);
+    private static Flaw? FlawOf(Reply reply) =>
+        reply.CutOff ? Flaw.CutOff
+        : string.IsNullOrWhiteSpace(reply.Message.Content) ? Flaw.Empty
+        : null;
+
+    /// <summary>A way a reply can be unusable, and what to say about it: to the model, to the user and to the log.</summary>
+    private sealed record Flaw(string LogEvent, string Nudge, string GiveUpReason, string GiveUpMessage)
+    {
+        // A small model can spend its whole context window thinking and run out of room before it answers.
+        public static readonly Flaw CutOff = new(
+            "cut_off",
+            "Your last reply was cut off: you ran out of room before you finished. Do not think it all through again. " +
+            "Answer now in a few sentences.",
+            "cut_off_twice",
+            "Stopped: the model's reply was cut off twice because it ran out of room. Try /clear, or ask a narrower question.");
+
+        public static readonly Flaw Empty = new(
+            "nudge",
+            "You gave no answer. Answer now.",
+            "empty_after_nudge",
+            "The model returned no answer.");
+    }
 }

@@ -11,14 +11,13 @@ public sealed class TimedModel(ILanguageModel inner, TimeLedger ledger, string s
 
     public async Task<Reply> CompleteAsync(
         IConversation conversation,
-        IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation)
     {
         var started = _clock.GetTimestamp();
         Reply reply;
         try
         {
-            reply = await inner.CompleteAsync(conversation, tools, cancellation);
+            reply = await inner.CompleteAsync(conversation, cancellation);
         }
         catch
         {

@@ -4,6 +4,22 @@
 
 # homunculus
 
+## Demo step 1 of 5: just a conversation
+
+This branch is the first step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
+Here there are **no tools at all**: only the model, the conversation and the loop around them.
+
+- Every message you type is added to a conversation that starts with a system prompt; the **whole** conversation is sent to an
+  OpenAI-compatible `/chat/completions` endpoint on every turn, and the reply is added back to it. That is the model's only memory.
+- The reasoning of a thinking model is shown in gray, with the time each call took and the tokens it used (`/usage` for totals).
+- An empty reply, or one cut off because the model ran out of room, earns one retry.
+- Commands: `/help`, `/usage`, `/clear` (forget the conversation), `/exit`.
+
+Try it: ask a question, then a follow-up that only makes sense with the first answer; `/clear` and ask the follow-up again;
+ask about a file in the current folder (it cannot see it).
+
+The rest of this README describes the complete version.
+
 A tiny coding agent in plain .NET 10: a loop, ten tools, and a language model. No AI libraries, no NuGet packages in the app.
 
 > The name comes from the medieval alchemists' *homunculus*: a tiny artificial person brewed in a flask that does the work it is given. Here the flask is a language model and the little helper is a loop with six tools.

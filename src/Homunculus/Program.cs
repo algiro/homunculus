@@ -1,7 +1,6 @@
 using Homunculus;
 using Homunculus.Llm;
 using Homunculus.Logging;
-using Homunculus.Tools;
 
 Settings settings;
 try
@@ -24,9 +23,7 @@ try
     app = new App(
         settings,
         new ConsoleUserInterface(),
-        new ProjectDirectory(Directory.GetCurrentDirectory()),
         new OpenAiModel(http, settings.Model, log, settings.ReasoningEffort),
-        new OpenAiModel(http, settings.JudgeModel, log, settings.JudgeReasoningEffort),
         log);
 }
 catch (InvalidOperationException e)

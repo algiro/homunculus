@@ -1,7 +1,6 @@
 using Homunculus.Commands;
 using Homunculus.Llm;
 using Homunculus.Tests.Support;
-using Homunculus.Tools;
 using NSubstitute;
 
 namespace Homunculus.Tests;
@@ -9,73 +8,7 @@ namespace Homunculus.Tests;
 /// <summary>Whole-application behaviour: the pieces working together.</summary>
 public class AppTests
 {
-    private const string RunEcho = """{"command":"echo hi"}""";
-
     private TestApp _app = null!;
-
-    [TearDown]
-    public void TearDown()
-    {
-        _app?.Dispose();
-        _app = null!;
-    }
-
-    private async Task<ScriptedModel> RunCommandWithJudge(string judgeAnswer, params char[] userAnswers)
-    {
-        var model = new ScriptedModel(Replies.Tool("run_command", RunEcho), Replies.Text("done"));
-        _app = new TestApp(model, "judge", new ScriptedModel(Replies.Text(judgeAnswer)));
-        _app.Ui.Answers(userAnswers);
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-        return model;
-    }
-
-    [Test]
-    public async Task JudgeModeRunsACommandTheJudgeAllows()
-    {
-        var model = await RunCommandWithJudge("allow");
-
-        Assert.That(model.Conversations[1][^1].Content, Does.Contain("hi").And.Contain("[exit code 0]"));
-        Assert.That(_app.Ui.Questions, Is.Empty);
-    }
-
-    [Test]
-    public async Task JudgeModeStopsACommandTheJudgeDeniesWhenTheUserAgrees()
-    {
-        var model = await RunCommandWithJudge("deny", 'n');
-
-        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Refused by the user."));
-        Assert.That(_app.Ui.Questions.Single(), Does.Contain("would deny"));
-    }
-
-    [Test]
-    public async Task JudgeModeRunsADeniedCommandWhenTheUserOverrulesTheJudge()
-    {
-        var model = await RunCommandWithJudge("deny", 'y');
-
-        Assert.That(model.Conversations[1][^1].Content, Does.Contain("[exit code 0]"));
-    }
-
-    [Test]
-    public async Task JudgeModeAsksTheUserWhenTheJudgeIsUnsure()
-    {
-        var model = await RunCommandWithJudge("ask", 'y');
-
-        Assert.That(_app.Ui.Questions, Has.Count.EqualTo(1));
-        Assert.That(model.Conversations[1][^1].Content, Does.Contain("[exit code 0]"));
-    }
-
-    [Test]
-    public async Task EffectModeIsTheOnlyOneThatNeverConsultsTheJudge()
-    {
-        var judge = new ScriptedModel();
-        _app = new TestApp(new ScriptedModel(Replies.Tool("run_command", RunEcho), Replies.Text("done")), "effect", judge);
-        _app.Ui.Answers('y');
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-
-        Assert.That(judge.Calls, Is.Zero);
-    }
 
     [Test]
     public async Task UsageSaysSoWhenNothingWasReported()
@@ -86,80 +19,6 @@ public class AppTests
         await _app.Repl.RunAsync();
 
         Assert.That(_app.Ui.AllOutput, Does.Contain("No tokens reported yet."));
-    }
-
-    [Test]
-    public async Task UsageCountsTheAgentAndTheJudgeSeparately()
-    {
-        var model = new ScriptedModel(Replies.Tool("run_command", RunEcho), Replies.Text("done"))
-        {
-            Usage = new TokenUsage(10, 5, 15),
-        };
-        var judge = new ScriptedModel(Replies.Text("allow")) { Usage = new TokenUsage(3, 1, 4, Cached: 2) };
-        _app = new TestApp(model, "judge", judge);
-        _app.Ui.TypesLines("go", "/usage");
-
-        await _app.Repl.RunAsync();
-
-        // The model time is real elapsed time, so only its format is checked.
-        Assert.That(_app.Ui.Output[^1], Does.Match(
-            @"^agent: 2 calls, 20 in, 10 out, 30 total, [\d.,]+s\n" +
-            @"judge: 1 call, 3 in \(2 cached\), 1 out, 4 total, [\d.,]+s\n" +
-            @"total: 3 calls, 23 in \(2 cached\), 11 out, 34 total, [\d.,]+s$"));
-    }
-
-    [Test]
-    public async Task DoesNotWriteOutsideTheProjectWhenTheUserRefuses()
-    {
-        var model = new ScriptedModel(
-            Replies.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
-            Replies.Text("understood"));
-        _app = new TestApp(model, "effect");
-        _app.Ui.Answers('n');
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-
-        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.False);
-    }
-
-    [Test]
-    public async Task AsksBeforeReadingOutsideTheProjectEvenInAllowAllMode()
-    {
-        var model = new ScriptedModel(
-            Replies.Tool("list_files", """{"path":"/"}"""),
-            Replies.Text("understood"));
-        _app = new TestApp(model, "allow-all");
-        _app.Ui.Answers('n');
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-
-        Assert.That(_app.Ui.Questions.Single(), Does.Contain("OUTSIDE"));
-        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Refused by the user."));
-    }
-
-    [Test]
-    public void TellsTheModelWhereTheProjectIs()
-    {
-        var model = new ScriptedModel(Replies.Text("hi"));
-        _app = new TestApp(model);
-
-        _app.Agent.RespondAsync("go", CancellationToken.None).GetAwaiter().GetResult();
-
-        Assert.That(model.LastConversation[0].Content, Does.Contain(_app.Project.Location.Root));
-    }
-
-    [Test]
-    public async Task WritesOutsideTheProjectWhenTheUserAgrees()
-    {
-        var model = new ScriptedModel(
-            Replies.Tool("edit_file", """{"path":"../outside.txt","old_str":"","new_str":"x"}"""),
-            Replies.Text("done"));
-        _app = new TestApp(model, "effect");
-        _app.Ui.Answers('y');
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-
-        Assert.That(File.Exists(Path.Combine(_app.Project.Outside, "outside.txt")), Is.True);
     }
 
     [Test]
@@ -197,55 +56,8 @@ public class AppTests
 
         await _app.Repl.RunAsync();
 
-        Assert.That(_app.Ui.AllOutput, Does.Contain("/help").And.Contain("/tools").And.Contain("/usage").And.Contain("/policy [mode]")
-            .And.Contain("/plan").And.Contain("/clear").And.Contain("/exit").And.Contain("ctrl-c"));
-    }
-
-    [Test]
-    public async Task PlanSaysSoWhenThereIsNone()
-    {
-        _app = new TestApp(new ScriptedModel());
-        _app.Ui.TypesLines("/plan");
-
-        await _app.Repl.RunAsync();
-
-        Assert.That(_app.Ui.Output[^1], Is.EqualTo("No plan yet."));
-    }
-
-    [Test]
-    public async Task PlanShowsWhatTheModelRecorded()
-    {
-        var model = new ScriptedModel(Replies.Tool("plan", """{"steps":["[x] read","[ ] edit"]}"""), Replies.Text("done"));
-        _app = new TestApp(model);
-        _app.Ui.TypesLines("go", "/plan");
-
-        await _app.Repl.RunAsync();
-
-        Assert.That(_app.Ui.Output[^1], Is.EqualTo("1. [x] read\n2. [ ] edit"));
-    }
-
-    [Test]
-    public async Task ClearForgetsThePlanToo()
-    {
-        var model = new ScriptedModel(Replies.Tool("plan", """{"steps":["a"]}"""), Replies.Text("done"));
-        _app = new TestApp(model);
-        _app.Ui.TypesLines("go", "/clear", "/plan");
-
-        await _app.Repl.RunAsync();
-
-        Assert.That(_app.Ui.Output[^1], Is.EqualTo("No plan yet."));
-    }
-
-    [Test]
-    public async Task TellsTheModelWhichShellRunsItsCommands()
-    {
-        var model = new ScriptedModel(Replies.Text("hi"));
-        _app = new TestApp(model);
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-
-        var description = model.ToolLists[0].Single(tool => tool.Name == "run_command").Description;
-        Assert.That(description, Does.Contain(Shell.Detect().Name));
+        Assert.That(_app.Ui.AllOutput, Does.Contain("/help").And.Contain("/usage")
+            .And.Contain("/clear").And.Contain("/exit").And.Contain("ctrl-c"));
     }
 
     [Test]
@@ -282,22 +94,11 @@ public class AppTests
 
         public Task Started => _started.Task;
 
-        public async Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public async Task<Reply> CompleteAsync(IConversation conversation, CancellationToken cancellation)
         {
             _started.SetResult();
             await Task.Delay(Timeout.Infinite, cancellation);
             return new Reply(Replies.Text("unreachable"));
         }
-    }
-
-    [Test]
-    public async Task UsesTheShellChosenInTheSettings()
-    {
-        var model = new ScriptedModel(Replies.Text("hi"));
-        _app = new TestApp(model, settings: TestApp.DefaultSettings with { Shell = Shell.Named("sh") });
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-
-        Assert.That(model.ToolLists[0].Single(tool => tool.Name == "run_command").Description, Does.Contain("with sh in"));
     }
 }

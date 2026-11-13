@@ -7,11 +7,9 @@ public class ReplTests
 {
     private TestApp _app = null!;
 
-    [TearDown] public void TearDown() => _app.Dispose();
-
     private async Task Run(ILanguageModel model, params string[] lines)
     {
-        _app = new TestApp(model, "effect");
+        _app = new TestApp(model);
         _app.Ui.TypesLines(lines);
         await _app.Repl.RunAsync();
     }
@@ -60,15 +58,7 @@ public class ReplTests
     {
         await Run(new ScriptedModel(), "/help");
 
-        Assert.That(_app.Ui.AllOutput, Does.Contain("/exit").And.Contain("/policy"));
-    }
-
-    [Test]
-    public async Task ListsTheTools()
-    {
-        await Run(new ScriptedModel(), "/tools");
-
-        Assert.That(_app.Ui.AllOutput, Does.Contain("read_file").And.Contain("run_command").And.Contain("plan"));
+        Assert.That(_app.Ui.AllOutput, Does.Contain("/exit").And.Contain("/usage"));
     }
 
     [Test]
@@ -80,32 +70,6 @@ public class ReplTests
 
         Assert.That(_app.Ui.AllOutput, Does.Contain("Conversation cleared."));
         Assert.That(model.LastConversation.Select(m => m.Role), Is.EqualTo(new[] { Role.System, Role.User }));
-    }
-
-    [Test]
-    public async Task ShowsTheCurrentPolicyAndTheAvailableModes()
-    {
-        await Run(new ScriptedModel(), "/policy");
-
-        Assert.That(_app.Ui.AllOutput, Does.Contain("Policy: effect").And.Contain("allow-all"));
-    }
-
-    [Test]
-    public async Task ChangesThePolicy()
-    {
-        await Run(new ScriptedModel(), "/policy allow-all");
-
-        Assert.That(_app.Policy.Mode, Is.EqualTo("allow-all"));
-        Assert.That(_app.Ui.AllOutput, Does.Contain("Policy: allow-all"));
-    }
-
-    [Test]
-    public async Task RejectsAnUnknownPolicy()
-    {
-        await Run(new ScriptedModel(), "/policy bogus");
-
-        Assert.That(_app.Policy.Mode, Is.EqualTo("effect"));
-        Assert.That(_app.Ui.AllOutput, Does.Contain("Unknown mode"));
     }
 
     [Test]
@@ -143,7 +107,7 @@ public class ReplTests
     {
         private bool _failed;
 
-        public Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public Task<Reply> CompleteAsync(IConversation conversation, CancellationToken cancellation)
         {
             if (_failed) return Task.FromResult(new Reply(Replies.Text("recovered")));
             _failed = true;
@@ -155,7 +119,7 @@ public class ReplTests
     {
         private bool _cancelled;
 
-        public Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
+        public Task<Reply> CompleteAsync(IConversation conversation, CancellationToken cancellation)
         {
             if (_cancelled) return Task.FromResult(new Reply(Replies.Text("recovered")));
             _cancelled = true;
