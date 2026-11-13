@@ -13,10 +13,10 @@ public class InsertLinesAppTests
 
     [TearDown] public void TearDown() => _app.Dispose();
 
-    private ScriptedModel Start(params Message[] script)
+    private ScriptedModel Start(string mode, params Message[] script)
     {
         var model = new ScriptedModel(script);
-        _app = new TestApp(model);
+        _app = new TestApp(model, mode);
         _app.Project.Write("App.cs", "commands\n    .Add(new ClearCommand(agent, ui))\n    .Add(new ExitCommand());\n");
         return model;
     }
@@ -24,7 +24,7 @@ public class InsertLinesAppTests
     [Test]
     public async Task RegistersSomethingNextToItsSiblingsWithoutAsking()
     {
-        var model = Start(Replies.Tool("insert_lines", Insert), Replies.Text("done"));
+        var model = Start("effect", Replies.Tool("insert_lines", Insert), Replies.Text("done"));
 
         await _app.Agent.RespondAsync("register it", CancellationToken.None);
 
@@ -36,7 +36,7 @@ public class InsertLinesAppTests
     [Test]
     public async Task ListsTheFileAsEditedAtTheEndOfTheTurn()
     {
-        Start(Replies.Tool("insert_lines", Insert), Replies.Text("done"));
+        Start("allow-all", Replies.Tool("insert_lines", Insert), Replies.Text("done"));
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
@@ -46,7 +46,8 @@ public class InsertLinesAppTests
     [Test]
     public async Task AsksBeforeChangingAFileOutsideTheProject()
     {
-        var model = Start(Replies.Tool("insert_lines", """{"path":"../outside.txt","line":"a","text":"b"}"""),
+        var model = Start("allow-all",
+            Replies.Tool("insert_lines", """{"path":"../outside.txt","line":"a","text":"b"}"""),
             Replies.Text("ok"));
         _app.Ui.Answers('n');
 
@@ -59,7 +60,7 @@ public class InsertLinesAppTests
     [Test]
     public async Task IsDescribedToTheModelAndMentionedInThePromptAndInEditFile()
     {
-        var model = Start(Replies.Text("hi"));
+        var model = Start("allow-all", Replies.Text("hi"));
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
@@ -74,7 +75,8 @@ public class InsertLinesAppTests
     public async Task RepeatedFailingInsertionsAreStoppedLikeAnyOtherToolCall()
     {
         var bad = """{"path":"App.cs","line":"zzz_missing()","text":"x"}""";
-        var model = Start(Replies.Tool("insert_lines", bad, "c1"), Replies.Tool("insert_lines", bad, "c2"), Replies.Tool("insert_lines", bad, "c3"), Replies.Text("never"));
+        var model = Start("allow-all",
+            Replies.Tool("insert_lines", bad, "c1"), Replies.Tool("insert_lines", bad, "c2"), Replies.Tool("insert_lines", bad, "c3"), Replies.Text("never"));
 
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 

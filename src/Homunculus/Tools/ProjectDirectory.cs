@@ -22,9 +22,9 @@ public sealed class ProjectDirectory
 
     public string Resolve(string path) => Path.GetFullPath(path, Root);
 
-    /// <summary>True when the call reads or writes a file that is not inside the project.</summary>
+    /// <summary>True when the call reads, writes or deletes a file that is not inside the project.</summary>
     public bool IsOutside(ToolEffect effect) =>
-        effect is { Path: { } path } && !Contains(path);
+        effect is { Access: ToolAccess.Read or ToolAccess.Write or ToolAccess.Delete, Path: { } path } && !Contains(path);
 
     /// <summary>
     /// True when the path, with every link on it followed, is the project or lies inside it. A path that cannot be followed

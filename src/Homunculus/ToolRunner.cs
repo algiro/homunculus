@@ -10,8 +10,10 @@ namespace Homunculus;
 /// Runs one tool call the model asked for, if approved. Failures the model can act on (a tool's own complaint, a missing file,
 /// a locked or forbidden path) become text it can read. Anything else is a bug in a tool, so it is not hidden and propagates.
 /// It also notices a model that keeps repeating the same failing call: the second time it is told so, the third time the agent stops.
+/// When the user set a check, the guard runs it after every successful change to a file, adds its verdict to the result, and
+/// may undo an edit that broke the build; an undone change counts as a failure of the call.
 /// </summary>
-public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInterface ui, IEventLog? log = null)
+public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInterface ui, IEventLog? log = null, ChangeGuard? guard = null)
 {
     public const int StopAfterIdenticalFailures = 3;
 
@@ -54,7 +56,18 @@ public sealed class ToolRunner(ToolRegistry tools, Approvals approvals, IUserInt
 
     private async Task<string> RunApprovedAsync(ITool tool, ToolCall call, CancellationToken cancellation)
     {
+        var snapshot = guard?.Before(tool, call.Arguments);
         var result = await tool.RunAsync(call.Arguments, cancellation);
+        if (tool.EffectOf(call.Arguments).Access == ToolAccess.Plan && result.Length > 0)
+            ui.Show(result);
+
+        if (guard is not null)
+        {
+            var verdict = await guard.AfterAsync(snapshot, tool, call.Arguments, result, cancellation);
+            if (verdict.Undone) return ShowFailure(call, verdict.Result);
+            result = verdict.Result;
+        }
+
         _failures.Remove(KeyOf(call));
         return result;
     }

@@ -3,7 +3,7 @@ using Homunculus.Tools;
 
 namespace Homunculus.Policy;
 
-/// <summary>Reads and writes inside the project never need this policy's approval; everything else is up to the wrapped policy.</summary>
+/// <summary>Plans, and reads, writes or deletes inside the project, never need this policy's approval; everything else is up to the wrapped policy.</summary>
 public sealed class ProjectBoundaryPolicy(ProjectDirectory project, IPolicy inner) : IPolicy
 {
     public Task<Verdict> EvaluateAsync(ITool tool, JsonElement arguments, CancellationToken cancellation) =>
@@ -13,7 +13,8 @@ public sealed class ProjectBoundaryPolicy(ProjectDirectory project, IPolicy inne
 
     private bool IsSafe(ToolEffect effect) => effect switch
     {
-        { Path: { } path } => project.Contains(path),
+        { Access: ToolAccess.Plan } => true,
+        { Access: ToolAccess.Read or ToolAccess.Write or ToolAccess.Delete, Path: { } path } => project.Contains(path),
         _ => false,
     };
 }

@@ -17,16 +17,16 @@ public class ToolRegistryTests
     public void ReturnsNullForUnknownTools() => Assert.That(_app.Tools.Find("nope"), Is.Null);
 
     [Test]
-    public void OffersTheSevenTools() =>
+    public void OffersTheTenTools() =>
         Assert.That(_app.Tools.All.Select(t => t.Name), Is.EquivalentTo(
-            new[] { "list_files", "glob", "grep", "read_file", "edit_file", "write_file", "insert_lines" }));
+            new[] { "list_files", "glob", "grep", "read_file", "edit_file", "write_file", "insert_lines", "delete_file", "run_command", "plan" }));
 
     [Test]
     public void DescribesEveryToolForTheModel()
     {
         var specs = _app.Tools.Specs();
 
-        Assert.That(specs, Has.Count.EqualTo(7));
+        Assert.That(specs, Has.Count.EqualTo(10));
         Assert.That(specs, Has.All.Matches<Homunculus.Llm.ToolSpec>(s =>
             s.Description.Length > 0 && s.Parameters["type"]!.GetValue<string>() == "object"));
     }
@@ -50,11 +50,19 @@ public class ToolRegistryTests
     }
 
     [Test]
-    public void LoadsOnlyTheEnabledTools()
+    public void PlanTakesAListOfSteps()
+    {
+        var plan = _app.Tools.Specs().Single(s => s.Name == "plan");
+
+        Assert.That(plan.Parameters["properties"]!["steps"]!["type"]!.GetValue<string>(), Is.EqualTo("array"));
+    }
+
+    [Test]
+    public void LoadsOnlyTheEnabledToolsPlusPlan()
     {
         using var app = new TestApp(new ScriptedModel(), settings: TestApp.DefaultSettings with { EnabledTools = ["read_file"] });
 
-        Assert.That(app.Tools.All.Select(t => t.Name), Is.EquivalentTo(new[] { "read_file" }));
+        Assert.That(app.Tools.All.Select(t => t.Name), Is.EquivalentTo(new[] { "read_file", "plan" }));
     }
 
     [Test]

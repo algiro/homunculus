@@ -24,7 +24,7 @@ public sealed class StaleReads
             Replace(conversation, path, "the file was read again further down");
             _readsById[call.Id] = (path, call.Arguments.OptionalText("path") ?? path);
         }
-        else if (effect.Value.Access is ToolAccess.Write)
+        else if (effect.Value.Access is ToolAccess.Write or ToolAccess.Delete)
         {
             Replace(conversation, path, "the file was changed afterwards, so this copy is out of date");
         }

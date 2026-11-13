@@ -112,6 +112,12 @@ public class WriteFileToolTests
         Assert.That(_tool.Description, Does.Contain("new file").And.Contain("refuses a file that already exists"));
 
     [Test]
-    public void EditFilePointsToIt() =>
-        Assert.That(new EditFileTool(_project.Location).Description, Does.Contain("write_file is simpler"));
+    public void EditFileAndRunCommandPointToIt()
+    {
+        var edit = new EditFileTool(_project.Location);
+        var run = new RunCommandTool(_project.Location, TimeSpan.FromSeconds(1));
+
+        Assert.That(edit.Description, Does.Contain("write_file is simpler"));
+        Assert.That(run.Description, Does.Contain("Do not use it to create or edit files").And.Contain("write_file"));
+    }
 }

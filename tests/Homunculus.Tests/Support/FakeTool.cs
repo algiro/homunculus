@@ -15,7 +15,7 @@ public sealed class FakeTool(string name) : ITool
     public Exception? Failure { get; set; }
     public List<JsonElement> Calls { get; } = [];
 
-    public ToolEffect EffectOf(JsonElement arguments) => new(ToolAccess.Read);
+    public ToolEffect EffectOf(JsonElement arguments) => ToolEffect.Planning;
 
     public Task<string> RunAsync(JsonElement arguments, CancellationToken cancellation)
     {

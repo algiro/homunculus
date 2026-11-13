@@ -10,10 +10,10 @@ public class IterationBudgetTests
 
     private IterationBudget Budget(IterationLimits limits) => new(limits, _ui);
 
-    private static int Take(IterationBudget budget)
+    private static int Take(IterationBudget budget, bool planned = false)
     {
         var taken = 0;
-        while (budget.TryTakeTurn()) taken++;
+        while (budget.TryTakeTurn(planned)) taken++;
         return taken;
     }
 
@@ -21,7 +21,7 @@ public class IterationBudgetTests
     public void StopsAtTheLimitWhenTheUserDeclines()
     {
         _ui.Answers('n');
-        var budget = Budget(new IterationLimits(3));
+        var budget = Budget(new IterationLimits(3, 5));
 
         Assert.That(Take(budget), Is.EqualTo(3));
         Assert.That(_ui.Questions.Single(), Does.Contain("Reached 3"));
@@ -33,7 +33,7 @@ public class IterationBudgetTests
     {
         _ui.Answers('y', 'y', 'n');
 
-        Assert.That(Take(Budget(new IterationLimits(3))), Is.EqualTo(9));
+        Assert.That(Take(Budget(new IterationLimits(3, 5))), Is.EqualTo(9));
         Assert.That(_ui.Questions, Has.Count.EqualTo(3));
     }
 
@@ -42,9 +42,23 @@ public class IterationBudgetTests
     {
         var budget = Budget(IterationLimits.Unlimited);
 
-        for (var i = 0; i < 1000; i++) Assert.That(budget.TryTakeTurn(), Is.True);
+        for (var i = 0; i < 1000; i++) Assert.That(budget.TryTakeTurn(planned: false), Is.True);
 
         Assert.That(_ui.Questions, Is.Empty);
         Assert.That(budget.Used, Is.EqualTo(1000));
+    }
+
+    [Test]
+    public void ARaisedLimitOnceAPlanExistsDefersTheQuestion()
+    {
+        _ui.Answers('n');
+        var budget = Budget(new IterationLimits(3, 5));
+
+        for (var i = 0; i < 2; i++) budget.TryTakeTurn(planned: false);
+        var more = 0;
+        while (budget.TryTakeTurn(planned: true)) more++;
+
+        Assert.That(budget.Used, Is.EqualTo(5));
+        Assert.That(more, Is.EqualTo(3));
     }
 }
