@@ -4,19 +4,16 @@
 
 # homunculus
 
-## Demo step 4 of 5: commands, guards and a judge
+## Demo step 5 of 5: the web
 
-This branch is the fourth step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
-New since step 3: `run_command`, `delete_file` and `plan`, and the guards around them.
+This branch is the last step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
+New since step 4: `web_search` and `web_fetch`, for anything the project cannot tell the model.
 
-- **Policy modes** (`/policy`): `judge` (default) asks a second model whether a command is safe, `effect` asks you for every
-  command, `allow-all` runs everything. A judge's "no" is put to you, and you can overrule it. `HOMUNCULUS_JUDGE_MODEL` picks the judge.
-- Deleting a file the agent did not create in this session always asks you.
-- **Change guard:** after every change the project's check (build) runs (`HOMUNCULUS_CHECK_COMMAND`, or detected), and an edit
-  that breaks a passing build is undone.
-- `plan` records the steps of a bigger task (`/plan` shows them) and raises the iteration limit.
+- `web_search` uses DuckDuckGo, or Brave Search when `HOMUNCULUS_SEARCH_API_KEY` is set; results carry today's date and ask the
+  model to read a page before answering.
+- `web_fetch` reads one page as plain text: no scripts or menus, tables kept as rows, at most 6,000 characters at a time.
 
-Try it: ask for a change and watch the check run after each edit; switch `/policy` and ask it to run the tests.
+Try it: "What's the weather in Vega de San Mateo (Las Palmas)?"
 
 The rest of this README describes the complete version.
 
