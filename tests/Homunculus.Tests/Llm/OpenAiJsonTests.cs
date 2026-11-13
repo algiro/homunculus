@@ -168,12 +168,14 @@ public class OpenAiJsonTests
         Assert.That(OpenAiJson.ParseReply(body).Reasoning, Is.Null);
 
     [Test]
-    public void RejectsAReplyThatWasCutOffByTheOutputLimit()
+    public void MarksAReplyThatWasCutOffByTheOutputLimitAndDropsItsToolCalls()
     {
-        var error = Assert.Throws<FormatException>(() =>
-            OpenAiJson.ParseReply("""{"choices":[{"finish_reason":"length","message":{"content":"par"}}]}"""));
+        var reply = OpenAiJson.ParseReply(
+            """{"choices":[{"finish_reason":"length","message":{"content":"par","tool_calls":[{"id":"c","type":"function","function":{"name":"x","arguments":"{"}}]}}]}""");
 
-        Assert.That(error!.Message, Does.Contain("cut off"));
+        Assert.That(reply.CutOff, Is.True);
+        Assert.That(reply.Message.Content, Is.EqualTo("par"));
+        Assert.That(reply.Message.HasToolCalls, Is.False);
     }
 
     [Test]

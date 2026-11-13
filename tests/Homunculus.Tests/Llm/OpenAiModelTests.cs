@@ -174,7 +174,6 @@ public class OpenAiModelTests
         Assert.That(error!.InnerException, Is.InstanceOf<HttpRequestException>());
     }
 
-    [TestCase("""{"choices":[{"finish_reason":"length","message":{"content":"par"}}]}""")]
     [TestCase("""{"choices":[]}""")]
     [TestCase("""{}""")]
     [TestCase("not json")]

@@ -18,7 +18,11 @@ public sealed class App
         "read a file before editing it, and keep answers short. When you run tests or a build, make sure they use your latest edits. " +
         "Before you implement an interface, read it and one existing implementation. If your new code does not compile, fix your own code: " +
         "never change or delete existing files or types to make it compile. " +
-        "Put each new class in its own file, named after it, and create it before you register it or use it anywhere else.";
+        "Put each new class in its own file, named after it, and create it before you register it or use it anywhere else. " +
+        "Questions need not be about code. For anything you cannot know from the project, such as the weather, news, current facts or documentation, " +
+        "you MUST call the web_search tool first (it is a tool of its own, not a command); if its snippets lack the answer, read the best link with web_fetch, never with curl. Then answer from what you read, naming the sources. " +
+        "Never say you cannot look something up while web_search is available, and never guess. " +
+        $"Today is {DateTime.Now:dddd, d MMMM yyyy}.";
 
     public App(
         Settings settings,
@@ -27,11 +31,15 @@ public sealed class App
         ILanguageModel model,
         ILanguageModel judge,
         IEventLog? log = null,
-        CheckDetector? checks = null)
+        CheckDetector? checks = null,
+        ISearchProvider? search = null)
     {
         var allowed = new AllowedPrograms(settings.AllowedPrograms ?? AllowedPrograms.Defaults);
         Changes = new ChangedFiles(project);
         Reads = new ReadFiles();
+        search ??= settings.SearchApiKey is { } searchKey
+            ? new BraveSearchProvider(new HttpClient(), searchKey)
+            : new DuckDuckGoSearchProvider(new HttpClient());
         Tools = new ToolRegistry(
         [
             new ListFilesTool(project),
@@ -44,6 +52,8 @@ public sealed class App
             new DeleteFileTool(project, Changes),
             new RunCommandTool(project, settings.CommandTimeout, settings.Shell),
             new PlanTool(Plan),
+            new WebSearchTool(search),
+            new WebFetchTool(new HttpClient { Timeout = TimeSpan.FromSeconds(30) }),
         ], settings.EnabledTools);
 
         Policy = new SwitchablePolicy(new Dictionary<string, IPolicy>

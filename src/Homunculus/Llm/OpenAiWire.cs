@@ -84,15 +84,20 @@ internal static class OpenAiWireMapping
 
     extension(OpenAiWire.ReplyDto reply)
     {
-        /// <exception cref="FormatException">The reply has no first choice with a message, or the model was cut off.</exception>
+        /// <summary>A reply cut off by the length limit keeps its text but drops its tool calls, which may be incomplete.</summary>
+        /// <exception cref="FormatException">The reply has no first choice with a message.</exception>
         public Reply FromWire()
         {
             var choice = reply.Choices?.FirstOrDefault();
             var message = choice?.Message ?? throw new FormatException("no choices[0].message");
-            if (choice.FinishReason == "length")
-                throw new FormatException("the reply was cut off by the output limit (finish_reason: length)");
-
             var reasoning = message.Reasoning ?? message.ReasoningContent;
+            if (choice.FinishReason == "length")
+                return new Reply(
+                    Message.Assistant(message.Content),
+                    reply.Usage?.FromWire(),
+                    string.IsNullOrWhiteSpace(reasoning) ? null : reasoning.Trim(),
+                    CutOff: true);
+
             return new Reply(
                 Message.Assistant(message.Content, message.ToolCalls?.Select(c => c.FromWire()).ToList()),
                 reply.Usage?.FromWire(),
