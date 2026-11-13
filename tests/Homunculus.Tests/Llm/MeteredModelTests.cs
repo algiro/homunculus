@@ -7,7 +7,7 @@ public class MeteredModelTests
 {
     private static readonly FixedConversation Question = new([Message.User("hi")]);
 
-    private static Task<Reply> Ask(MeteredModel model) => model.CompleteAsync(Question, CancellationToken.None);
+    private static Task<Reply> Ask(MeteredModel model) => model.CompleteAsync(Question, [], CancellationToken.None);
 
     [Test]
     public async Task RecordsTheReportedUsageAndReturnsTheReplyUnchanged()
@@ -44,7 +44,7 @@ public class MeteredModelTests
 
     private sealed class FailingModel : ILanguageModel
     {
-        public Task<Reply> CompleteAsync(IConversation conversation, CancellationToken cancellation) =>
+        public Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation) =>
             throw new ModelException("down");
     }
 }

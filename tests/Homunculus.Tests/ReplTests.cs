@@ -7,6 +7,8 @@ public class ReplTests
 {
     private TestApp _app = null!;
 
+    [TearDown] public void TearDown() => _app.Dispose();
+
     private async Task Run(ILanguageModel model, params string[] lines)
     {
         _app = new TestApp(model);
@@ -58,7 +60,15 @@ public class ReplTests
     {
         await Run(new ScriptedModel(), "/help");
 
-        Assert.That(_app.Ui.AllOutput, Does.Contain("/exit").And.Contain("/usage"));
+        Assert.That(_app.Ui.AllOutput, Does.Contain("/exit").And.Contain("/tools"));
+    }
+
+    [Test]
+    public async Task ListsTheTools()
+    {
+        await Run(new ScriptedModel(), "/tools");
+
+        Assert.That(_app.Ui.AllOutput, Does.Contain("list_files").And.Contain("glob").And.Contain("read_file"));
     }
 
     [Test]
@@ -107,7 +117,7 @@ public class ReplTests
     {
         private bool _failed;
 
-        public Task<Reply> CompleteAsync(IConversation conversation, CancellationToken cancellation)
+        public Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             if (_failed) return Task.FromResult(new Reply(Replies.Text("recovered")));
             _failed = true;
@@ -119,7 +129,7 @@ public class ReplTests
     {
         private bool _cancelled;
 
-        public Task<Reply> CompleteAsync(IConversation conversation, CancellationToken cancellation)
+        public Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             if (_cancelled) return Task.FromResult(new Reply(Replies.Text("recovered")));
             _cancelled = true;

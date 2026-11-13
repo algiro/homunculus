@@ -10,6 +10,13 @@ public class AppTests
 {
     private TestApp _app = null!;
 
+    [TearDown]
+    public void TearDown()
+    {
+        _app?.Dispose();
+        _app = null!;
+    }
+
     [Test]
     public async Task UsageSaysSoWhenNothingWasReported()
     {
@@ -19,6 +26,32 @@ public class AppTests
         await _app.Repl.RunAsync();
 
         Assert.That(_app.Ui.AllOutput, Does.Contain("No tokens reported yet."));
+    }
+
+    [Test]
+    public async Task AsksBeforeReadingOutsideTheProject()
+    {
+        var model = new ScriptedModel(
+            Replies.Tool("list_files", """{"path":"/"}"""),
+            Replies.Text("understood"));
+        _app = new TestApp(model);
+        _app.Ui.Answers('n');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(_app.Ui.Questions.Single(), Does.Contain("OUTSIDE"));
+        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Refused by the user."));
+    }
+
+    [Test]
+    public void TellsTheModelWhereTheProjectIs()
+    {
+        var model = new ScriptedModel(Replies.Text("hi"));
+        _app = new TestApp(model);
+
+        _app.Agent.RespondAsync("go", CancellationToken.None).GetAwaiter().GetResult();
+
+        Assert.That(model.LastConversation[0].Content, Does.Contain(_app.Project.Location.Root));
     }
 
     [Test]
@@ -56,7 +89,7 @@ public class AppTests
 
         await _app.Repl.RunAsync();
 
-        Assert.That(_app.Ui.AllOutput, Does.Contain("/help").And.Contain("/usage")
+        Assert.That(_app.Ui.AllOutput, Does.Contain("/help").And.Contain("/tools").And.Contain("/usage")
             .And.Contain("/clear").And.Contain("/exit").And.Contain("ctrl-c"));
     }
 
@@ -94,7 +127,7 @@ public class AppTests
 
         public Task Started => _started.Task;
 
-        public async Task<Reply> CompleteAsync(IConversation conversation, CancellationToken cancellation)
+        public async Task<Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             _started.SetResult();
             await Task.Delay(Timeout.Infinite, cancellation);

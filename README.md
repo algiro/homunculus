@@ -4,19 +4,18 @@
 
 # homunculus
 
-## Demo step 1 of 5: just a conversation
+## Demo step 2 of 5: the first tools
 
-This branch is the first step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
-Here there are **no tools at all**: only the model, the conversation and the loop around them.
+This branch is the second step of a talk that builds the harness up one piece at a time (`demo_step_1` … `demo_step_5`).
+New since step 1: **tools**, read-only for now: `list_files`, `glob` and `read_file`.
 
-- Every message you type is added to a conversation that starts with a system prompt; the **whole** conversation is sent to an
-  OpenAI-compatible `/chat/completions` endpoint on every turn, and the reply is added back to it. That is the model's only memory.
-- The reasoning of a thinking model is shown in gray, with the time each call took and the tokens it used (`/usage` for totals).
-- An empty reply, or one cut off because the model ran out of room, earns one retry.
-- Commands: `/help`, `/usage`, `/clear` (forget the conversation), `/exit`.
+- The request now describes each tool (name, description, JSON schema); the model can answer with tool calls instead of text.
+- The agent becomes a loop: run the calls, send the results back, ask again, until the model answers with text.
+- The tool runner turns failures into text the model can read, and stops a model that repeats the same failing call.
+- Reads inside the project folder just run; anything outside it asks you first.
+- An iteration limit asks you whether to go on (`HOMUNCULUS_MAX_ITERATIONS`); `/tools` lists the tools, `HOMUNCULUS_TOOLS` picks some.
 
-Try it: ask a question, then a follow-up that only makes sense with the first answer; `/clear` and ask the follow-up again;
-ask about a file in the current folder (it cannot see it).
+Try it: start it in a project folder and ask "What does this project do?"
 
 The rest of this README describes the complete version.
 

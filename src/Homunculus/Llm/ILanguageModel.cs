@@ -6,5 +6,6 @@ public interface ILanguageModel
     /// <exception cref="OperationCanceledException">The call was cancelled.</exception>
     Task<Reply> CompleteAsync(
         IConversation conversation,
+        IReadOnlyList<ToolSpec> tools,
         CancellationToken cancellation);
 }

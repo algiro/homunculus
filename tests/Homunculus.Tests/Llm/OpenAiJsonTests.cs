@@ -1,13 +1,16 @@
 using System.Text.Json.Nodes;
 using Homunculus.Llm;
+using Homunculus.Tests.Support;
 
 namespace Homunculus.Tests.Llm;
 
 /// <summary>The conversion between our messages and the chat-completions JSON, without any HTTP.</summary>
 public class OpenAiJsonTests
 {
-    private static JsonNode Request(IConversation conversation) =>
-        JsonNode.Parse(OpenAiJson.BuildRequest("my-model", conversation))!;
+    private static readonly ToolSpec Spec = new("read_file", "Reads", new JsonObject { ["type"] = "object" });
+
+    private static JsonNode Request(IConversation conversation, params ToolSpec[] tools) =>
+        JsonNode.Parse(OpenAiJson.BuildRequest("my-model", conversation, tools))!;
 
     private static Conversation Chat(params Message[] messages)
     {
@@ -27,11 +30,72 @@ public class OpenAiJsonTests
     }
 
     [Test]
+    public void LeavesOutTheToolsWhenThereAreNone() =>
+        Assert.That(Request(Chat())["tools"], Is.Null);
+
+    [Test]
+    public void DescribesEachToolAsAFunction()
+    {
+        var tool = Request(Chat(), Spec)["tools"]![0]!;
+
+        Assert.That(tool["type"]!.GetValue<string>(), Is.EqualTo("function"));
+        Assert.That(tool["function"]!["name"]!.GetValue<string>(), Is.EqualTo("read_file"));
+        Assert.That(tool["function"]!["parameters"]!["type"]!.GetValue<string>(), Is.EqualTo("object"));
+    }
+
+    [Test]
+    public void SendsToolCallArgumentsAsAJsonString()
+    {
+        var call = new ToolCall("c1", "read_file", Json.Parse("""{"path":"a.txt"}"""));
+
+        var sent = Request(Chat(Message.Assistant(null, [call])))["messages"]![1]!;
+
+        var function = sent["tool_calls"]![0]!["function"]!;
+        Assert.That(sent["tool_calls"]![0]!["id"]!.GetValue<string>(), Is.EqualTo("c1"));
+        Assert.That(function["name"]!.GetValue<string>(), Is.EqualTo("read_file"));
+        Assert.That(function["arguments"]!.GetValue<string>(), Is.EqualTo("""{"path":"a.txt"}"""));
+    }
+
+    [Test]
+    public void LinksAToolResultToItsCallAndOmitsEmptyFields()
+    {
+        var sent = Request(Chat(Message.ToolResult("c1", "output")))["messages"]![1]!.AsObject();
+
+        Assert.That(sent["role"]!.GetValue<string>(), Is.EqualTo("tool"));
+        Assert.That(sent["tool_call_id"]!.GetValue<string>(), Is.EqualTo("c1"));
+        Assert.That(sent.ContainsKey("tool_calls"), Is.False);
+    }
+
+    [Test]
     public void ReadsATextReply()
     {
         var message = OpenAiJson.ParseReply("""{"choices":[{"message":{"role":"assistant","content":"hi"}}]}""").Message;
 
-        Assert.That((message.Role, message.Content), Is.EqualTo((Role.Assistant, (string?)"hi")));
+        Assert.That((message.Role, message.Content, message.HasToolCalls), Is.EqualTo((Role.Assistant, (string?)"hi", false)));
+    }
+
+    [Test]
+    public void ReadsToolCallsAndParsesTheirArguments()
+    {
+        var message = OpenAiJson.ParseReply("""
+            {"choices":[{"message":{"content":null,"tool_calls":[
+              {"id":"c1","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"a.txt\"}"}}]}}]}
+            """).Message;
+
+        var call = message.ToolCalls!.Single();
+        Assert.That((call.Id, call.Name), Is.EqualTo(("c1", "read_file")));
+        Assert.That(call.Arguments.GetProperty("path").GetString(), Is.EqualTo("a.txt"));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    public void TreatsBlankArgumentsAsAnEmptyObject(string arguments)
+    {
+        var message = OpenAiJson.ParseReply($$$"""
+            {"choices":[{"message":{"tool_calls":[{"id":"c1","function":{"name":"x","arguments":"{{{arguments}}}"}}]}}]}
+            """).Message;
+
+        Assert.That(message.ToolCalls!.Single().Arguments.EnumerateObject(), Is.Empty);
     }
 
     [Test]
@@ -87,6 +151,7 @@ public class OpenAiJsonTests
 
         Assert.That(reply.Reasoning, Is.EqualTo("I will list the files first."));
         Assert.That(reply.Message.Content, Is.Empty);
+        Assert.That(reply.Message.HasToolCalls, Is.False);
         Assert.That(reply.Usage, Is.EqualTo(new TokenUsage(601, 177, 778, Cached: 571)));
     }
 
@@ -103,24 +168,28 @@ public class OpenAiJsonTests
         Assert.That(OpenAiJson.ParseReply(body).Reasoning, Is.Null);
 
     [Test]
-    public void MarksAReplyThatWasCutOffByTheOutputLimit()
+    public void MarksAReplyThatWasCutOffByTheOutputLimitAndDropsItsToolCalls()
     {
         var reply = OpenAiJson.ParseReply(
-            """{"choices":[{"finish_reason":"length","message":{"content":"par"}}]}""");
+            """{"choices":[{"finish_reason":"length","message":{"content":"par","tool_calls":[{"id":"c","type":"function","function":{"name":"x","arguments":"{"}}]}}]}""");
 
         Assert.That(reply.CutOff, Is.True);
         Assert.That(reply.Message.Content, Is.EqualTo("par"));
+        Assert.That(reply.Message.HasToolCalls, Is.False);
     }
 
     [Test]
     public void AcceptsAnyOtherFinishReason() =>
         Assert.That(
-            OpenAiJson.ParseReply("""{"choices":[{"finish_reason":"stop","message":{"content":"hi"}}]}""").Message.Content,
+            OpenAiJson.ParseReply("""{"choices":[{"finish_reason":"tool_calls","message":{"content":"hi"}}]}""").Message.Content,
             Is.EqualTo("hi"));
 
     [TestCase("""{"choices":[]}""", "no choices[0].message")]
     [TestCase("""{}""", "no choices[0].message")]
     [TestCase("""{"choices":[{}]}""", "no choices[0].message")]
+    [TestCase("""{"choices":[{"message":{"tool_calls":[{"function":{"name":"x","arguments":"{}"}}]}}]}""", "tool call without id")]
+    [TestCase("""{"choices":[{"message":{"tool_calls":[{"id":"c1"}]}}]}""", "tool call without function")]
+    [TestCase("""{"choices":[{"message":{"tool_calls":[{"id":"c1","function":{"arguments":"{}"}}]}}]}""", "tool call without name")]
     public void RejectsAReplyThatIsMissingWhatItNeeds(string body, string expectedMessage)
     {
         var error = Assert.Throws<FormatException>(() => OpenAiJson.ParseReply(body));
@@ -129,6 +198,7 @@ public class OpenAiJsonTests
     }
 
     [TestCase("not json")]
+    [TestCase("""{"choices":[{"message":{"tool_calls":[{"id":"c1","function":{"name":"x","arguments":"{broken"}}]}}]}""")]
     public void RejectsABodyThatIsNotValidJson(string body) =>
         Assert.Throws<FormatException>(() => OpenAiJson.ParseReply(body));
 }

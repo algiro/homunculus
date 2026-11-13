@@ -1,12 +1,16 @@
 using Homunculus.Llm;
 using Homunculus.Logging;
+using Homunculus.Tools;
 
 namespace Homunculus;
 
-/// <summary>The whole idea, at its simplest: add the user's message to the conversation, send it all to the model, show the answer.</summary>
+/// <summary>The whole idea: send the conversation, run any tool the model asks for, repeat until it answers with text.</summary>
 public sealed class Agent(
     ILanguageModel model,
     IConversation conversation,
+    ToolRegistry tools,
+    ToolRunner runner,
+    IterationLimits limits,
     bool showReasoning,
     IUserInterface ui,
     IEventLog? log = null)
@@ -19,12 +23,15 @@ public sealed class Agent(
     {
         conversation.Add(Message.User(input));
         _log.Write("turn_start", new { input });
+        var specs = tools.Specs();
         var retried = new HashSet<Flaw>();
+        var budget = new IterationBudget(limits, ui, _log);
+        runner.ForgetFailures();
 
-        // Usually one model call. A flawed reply (cut off, or empty) earns the model one more try of each kind.
-        for (var iteration = 0; ; iteration++)
+        while (budget.TryTakeTurn())
         {
-            var reply = await AskModelAsync(iteration, cancellation);
+            var iteration = budget.Used - 1;
+            var reply = await AskModelAsync(specs, iteration, cancellation);
 
             if (FlawOf(reply) is { } flaw)
             {
@@ -42,17 +49,37 @@ public sealed class Agent(
             }
 
             conversation.Add(reply.Message);
-            ui.Show(reply.Message.Content!);
-            if (reply.Usage is { } usage) ui.ShowUsage(usage);
-            _log.Write("turn_end", new { reason = "answer", iterations = iteration + 1 });
-            return;
+
+            if (!reply.Message.HasToolCalls)
+            {
+                ui.Show(reply.Message.Content!);
+                if (reply.Usage is { } usage) ui.ShowUsage(usage);
+                _log.Write("turn_end", new { reason = "answer", iterations = budget.Used });
+                return;
+            }
+
+            foreach (var call in reply.Message.ToolCalls!)
+            {
+                var result = await runner.RunAsync(call, cancellation);
+                conversation.Add(Message.ToolResult(call.Id, result));
+            }
+
+            if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
+            {
+                _log.Write("turn_end", new { reason = "stuck", tool = stuck.Name });
+                ui.Show($"Stopped: the model made the same {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times and it failed or was refused each time. Tell it what to do differently.");
+                return;
+            }
         }
+
+        _log.Write("turn_end", new { reason = "iteration_limit" });
+        ui.Show("Stopped: iteration limit reached for this message.");
     }
 
     /// <summary>One round trip: send the whole conversation, show what the model reports about it, log what it said.</summary>
-    private async Task<Reply> AskModelAsync(int iteration, CancellationToken cancellation)
+    private async Task<Reply> AskModelAsync(IReadOnlyList<ToolSpec> specs, int iteration, CancellationToken cancellation)
     {
-        var reply = await model.CompleteAsync(conversation, cancellation);
+        var reply = await model.CompleteAsync(conversation, specs, cancellation);
         if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
         if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
 
@@ -61,6 +88,7 @@ public sealed class Agent(
             iteration,
             reasoning = reply.Reasoning,
             content = reply.Message.Content,
+            toolCalls = reply.Message.ToolCalls?.Select(c => c.Name).ToArray(),
             usage = reply.Usage,
             ms = reply.Elapsed?.TotalMilliseconds,
             cutOff = reply.CutOff,
@@ -70,8 +98,10 @@ public sealed class Agent(
 
     private static Flaw? FlawOf(Reply reply) =>
         reply.CutOff ? Flaw.CutOff
-        : string.IsNullOrWhiteSpace(reply.Message.Content) ? Flaw.Empty
+        : IsEmpty(reply.Message) ? Flaw.Empty
         : null;
+
+    private static bool IsEmpty(Message message) => !message.HasToolCalls && string.IsNullOrWhiteSpace(message.Content);
 
     /// <summary>A way a reply can be unusable, and what to say about it: to the model, to the user and to the log.</summary>
     private sealed record Flaw(string LogEvent, string Nudge, string GiveUpReason, string GiveUpMessage)
@@ -80,13 +110,13 @@ public sealed class Agent(
         public static readonly Flaw CutOff = new(
             "cut_off",
             "Your last reply was cut off: you ran out of room before you finished. Do not think it all through again. " +
-            "Answer now in a few sentences.",
+            "Answer now in a few sentences from what you already have, or make one tool call.",
             "cut_off_twice",
             "Stopped: the model's reply was cut off twice because it ran out of room. Try /clear, or ask a narrower question.");
 
         public static readonly Flaw Empty = new(
             "nudge",
-            "You gave no answer. Answer now.",
+            "You neither called a tool nor gave an answer. Call a tool now, or answer.",
             "empty_after_nudge",
             "The model returned no answer.");
     }
