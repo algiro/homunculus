@@ -13,9 +13,12 @@ public sealed class Agent(
     IterationLimits limits,
     bool showReasoning,
     IUserInterface ui,
-    IEventLog? log = null)
+    IEventLog? log = null,
+    ChangedFiles? changes = null,
+    ReadFiles? reads = null)
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
+    private readonly StaleReads _stale = new();
 
     private const string Nudge = "You neither called a tool nor gave an answer. Call a tool now, or answer.";
 
@@ -23,9 +26,28 @@ public sealed class Agent(
         "Your last reply was cut off: you ran out of room before you finished. Do not think it all through again. " +
         "Answer now in a few sentences from what you already have, or make one tool call.";
 
-    public void ClearConversation() => conversation.Clear();
+    public void ClearConversation()
+    {
+        conversation.Clear();
+        reads?.Forget();
+        _stale.Forget();
+    }
 
     public async Task RespondAsync(string input, CancellationToken cancellation)
+    {
+        changes?.StartTurn();
+        try
+        {
+            await RunTurnAsync(input, cancellation);
+        }
+        finally
+        {
+            // However the turn ended, the user sees which files it touched.
+            if (changes?.Summary() is { } summary) ui.Show(summary);
+        }
+    }
+
+    private async Task RunTurnAsync(string input, CancellationToken cancellation)
     {
         conversation.Add(Message.User(input));
         _log.Write("turn_start", new { input });
@@ -101,6 +123,7 @@ public sealed class Agent(
             {
                 var result = await runner.RunAsync(call, cancellation);
                 conversation.Add(Message.ToolResult(call.Id, result));
+                _stale.AfterCall(conversation, call, EffectOf(call), result);
             }
 
             if (reply.Message.ToolCalls!.FirstOrDefault(runner.IsStuckOn) is { } stuck)
@@ -113,6 +136,19 @@ public sealed class Agent(
 
         _log.Write("turn_end", new { reason = "iteration_limit" });
         ui.Show("Stopped: iteration limit reached for this message.");
+    }
+
+    /// <summary>What the call does to a file, or null when the call is not one the tools can describe.</summary>
+    private ToolEffect? EffectOf(ToolCall call)
+    {
+        try
+        {
+            return tools.Find(call.Name)?.EffectOf(call.Arguments);
+        }
+        catch (ToolException)
+        {
+            return null;
+        }
     }
 
     private static bool IsEmpty(Message message) => !message.HasToolCalls && string.IsNullOrWhiteSpace(message.Content);

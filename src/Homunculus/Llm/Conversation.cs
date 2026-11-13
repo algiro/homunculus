@@ -6,6 +6,9 @@ public interface IConversation
     IReadOnlyList<Message> Messages { get; }
     void Add(Message message);
 
+    /// <summary>Puts another message in the place of an earlier one.</summary>
+    void Replace(int index, Message message);
+
     void Clear();
 }
 
@@ -16,6 +19,8 @@ public sealed class Conversation(string systemPrompt) : IConversation
     public IReadOnlyList<Message> Messages => _messages;
 
     public void Add(Message message) => _messages.Add(message);
+
+    public void Replace(int index, Message message) => _messages[index] = message;
 
     public void Clear()
     {
