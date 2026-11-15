@@ -128,6 +128,59 @@ public class AppTests
         Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("Refused by the user."));
     }
 
+    /// <summary>A link inside the project to a folder outside it, as a cloned repository or a junction can hold.</summary>
+    private string LinkToSecrets()
+    {
+        var secrets = Path.Combine(_app.Project.Outside, "secrets");
+        Directory.CreateDirectory(secrets);
+        File.WriteAllText(Path.Combine(secrets, "passwd"), "root:x:0:0");
+        _app.Project.LinkDirectory("link", secrets);
+        return secrets;
+    }
+
+    [Test]
+    public async Task AsksBeforeReadingThroughALinkThatLeadsOutsideEvenInAllowAllMode()
+    {
+        var model = new ScriptedModel(Replies.Tool("read_file", """{"path":"link/passwd"}"""), Replies.Text("understood"));
+        _app = new TestApp(model, "allow-all");
+        LinkToSecrets();
+        _app.Ui.Answers('n');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(_app.Ui.Questions.Single(), Does.Contain("OUTSIDE"));
+        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("Refused by the user."));
+    }
+
+    [Test]
+    public async Task DoesNotWriteThroughALinkThatLeadsOutsideWhenTheUserRefuses()
+    {
+        var model = new ScriptedModel(
+            Replies.Tool("edit_file", """{"path":"link/passwd","old_str":"root","new_str":"pwned"}"""),
+            Replies.Text("understood"));
+        _app = new TestApp(model, "allow-all");
+        var secrets = LinkToSecrets();
+        _app.Ui.Answers('n');
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(_app.Ui.Questions.Single(), Does.Contain("OUTSIDE"));
+        Assert.That(File.ReadAllText(Path.Combine(secrets, "passwd")), Is.EqualTo("root:x:0:0"));
+    }
+
+    [Test]
+    public async Task ListingTheProjectRootWithALinkInItDoesNotAsk()
+    {
+        var model = new ScriptedModel(Replies.Tool("list_files", "{}"), Replies.Text("done"));
+        _app = new TestApp(model, "allow-all");
+        LinkToSecrets();
+
+        await _app.Agent.RespondAsync("go", CancellationToken.None);
+
+        Assert.That(_app.Ui.Questions, Is.Empty);
+        Assert.That(model.Conversations[1][^1].Content, Does.Contain("link/"));
+    }
+
     [Test]
     public void TellsTheModelWhereTheProjectIs()
     {
