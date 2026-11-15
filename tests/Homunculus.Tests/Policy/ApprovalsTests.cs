@@ -152,4 +152,79 @@ public class ApprovalsTests
         Assert.That(await CheckRead(Guarded(), "src/a.txt"), Is.Null);
         Assert.That(_ui.Questions, Is.Empty);
     }
+
+    private static readonly RunCommandTool Commands = new(new ProjectDirectory("."), TimeSpan.FromSeconds(1));
+
+    private Approvals WithPrograms(params string[] allowed) => new(_policy, _ui, programs: new AllowedPrograms(allowed));
+
+    private static Task<string?> CheckCommand(Approvals approvals, string program, params string[] args) =>
+        approvals.CheckAsync(Commands, Json.Parse(System.Text.Json.JsonSerializer.Serialize(new { program, args })), CancellationToken.None);
+
+    [Test]
+    public async Task AsksBeforeRunningAProgramOffTheListEvenWhenThePolicyAllows()
+    {
+        PolicyAnswers(Verdict.Allow);
+        _ui.Answers('y');
+
+        Assert.That(await CheckCommand(WithPrograms("dotnet", "git"), "curl", "https://example.com"), Is.Null);
+        Assert.That(_ui.Questions.Single(), Does.Contain("'curl'").And.Contain("NOT an allowed program").And.Contain("dotnet, git"));
+        await _policy.DidNotReceiveWithAnyArgs().EvaluateAsync(default!, default, default);
+    }
+
+    [Test]
+    public async Task RefusesAProgramOffTheListWhenTheUserSaysNo()
+    {
+        PolicyAnswers(Verdict.Allow);
+        _ui.Answers('n');
+
+        Assert.That(await CheckCommand(WithPrograms("dotnet"), "curl"), Is.EqualTo("Refused by the user."));
+    }
+
+    [Test]
+    public async Task NeverOffersAlwaysForAProgramOffTheListAndAsksEachTime()
+    {
+        PolicyAnswers(Verdict.Allow);
+        _ui.Answers('y', 'y');
+        var approvals = WithPrograms("dotnet");
+
+        await CheckCommand(approvals, "curl", "x");
+        await CheckCommand(approvals, "curl", "x");
+
+        Assert.That(_ui.Options, Is.EqualTo(new[] { "yn", "yn" }));
+    }
+
+    [Test]
+    public async Task LeavesAListedProgramToThePolicy()
+    {
+        PolicyAnswers(Verdict.Allow);
+
+        Assert.That(await CheckCommand(WithPrograms("dotnet"), "dotnet", "test"), Is.Null);
+        Assert.That(_ui.Questions, Is.Empty);
+    }
+
+    [Test]
+    public async Task AlwaysForACommandCoversThatExactCommandOnly()
+    {
+        PolicyAnswers(Verdict.Ask);
+        _ui.Answers('a', 'n', 'n');
+        var approvals = WithPrograms("dotnet");
+
+        Assert.That(await CheckCommand(approvals, "dotnet", "test"), Is.Null);
+        Assert.That(await CheckCommand(approvals, "dotnet", "test"), Is.Null);
+        Assert.That(await CheckCommand(approvals, "dotnet", "test", "--filter", "x"), Is.EqualTo("Refused by the user."));
+        Assert.That(await CheckCommand(approvals, "dotnet", "run"), Is.EqualTo("Refused by the user."));
+        Assert.That(_ui.Questions, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public async Task SaysThatAlwaysForACommandMeansThatCommandOnly()
+    {
+        PolicyAnswers(Verdict.Ask);
+        _ui.Answers('n');
+
+        await CheckCommand(WithPrograms("dotnet"), "dotnet", "test");
+
+        Assert.That(_ui.Questions.Single(), Does.Contain("always allow exactly this command"));
+        Assert.That(_ui.Options.Single(), Is.EqualTo("yna"));
+    }
 }

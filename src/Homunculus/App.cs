@@ -17,13 +17,14 @@ public sealed class App
 
     public App(Settings settings, IUserInterface ui, ProjectDirectory project, ILanguageModel model, ILanguageModel judge, IEventLog? log = null)
     {
+        var allowed = new AllowedPrograms(settings.AllowedPrograms ?? AllowedPrograms.Defaults);
         Tools = new ToolRegistry(
         [
             new ListFilesTool(project),
             new ReadFileTool(project),
             new EditFileTool(project),
             new DeleteFileTool(project),
-            new RunCommandTool(project, settings.CommandTimeout),
+            new RunCommandTool(project, settings.CommandTimeout, allowed),
             new PlanTool(),
         ], settings.EnabledTools);
 
@@ -33,7 +34,7 @@ public sealed class App
             ["effect"] = new FixedPolicy(Verdict.Ask),
             ["allow-all"] = new FixedPolicy(Verdict.Allow),
         });
-        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project);
+        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, allowed);
 
         Runner = new ToolRunner(Tools, approvals, ui, log);
         Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
@@ -42,11 +43,12 @@ public sealed class App
         commands
             .Add(new HelpCommand(commands, ui))
             .Add(new ToolsCommand(Tools, ui))
-            .Add(new PolicyCommand(Policy, ui))
+            .Add(new PolicyCommand(Policy, ui, allowed))
             .Add(new UsageCommand(Usage, ui, Time))
             .Add(new ClearCommand(Agent, ui))
             .Add(new ExitCommand());
-        Repl = new Repl(Agent, commands, ui);
+        // The mode is in every prompt, so working in allow-all is never something the user has to remember.
+        Repl = new Repl(Agent, commands, ui, () => $"[{Policy.Mode}] > ");
     }
 
     public UsageLedger Usage { get; } = new();

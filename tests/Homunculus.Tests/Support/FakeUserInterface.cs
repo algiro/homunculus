@@ -33,13 +33,24 @@ public sealed class FakeUserInterface : IUserInterface
 
     public void ShowUsage(TokenUsage usage) => Usages.Add(usage);
 
+    /// <summary>The answer letters offered with each question, such as "yna", in the same order as <see cref="Questions"/>.</summary>
+    public List<string> Options { get; } = [];
+
     public char Choose(string question, string options)
     {
         Questions.Add(question);
+        Options.Add(options);
         return _choices.Count > 0 ? _choices.Dequeue() : throw new InvalidOperationException("Unexpected question: " + question);
     }
 
-    public string? ReadLine() => _lines.Count > 0 ? _lines.Dequeue() : null;
+    /// <summary>Every prompt shown before a line was read, in order.</summary>
+    public List<string> Prompts { get; } = [];
+
+    public string? ReadLine(string prompt)
+    {
+        Prompts.Add(prompt);
+        return _lines.Count > 0 ? _lines.Dequeue() : null;
+    }
 
     public IDisposable ListenForCancel(Action onCancel)
     {
