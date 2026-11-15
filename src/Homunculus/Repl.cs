@@ -4,12 +4,12 @@ using Homunculus.Llm;
 namespace Homunculus;
 
 /// <summary>Reads lines from the user: slash commands go to the command registry, anything else goes to the agent.</summary>
-public sealed class Repl(Agent agent, CommandRegistry commands, IUserInterface ui)
+public sealed class Repl(Agent agent, CommandRegistry commands, IUserInterface ui, Func<string>? prompt = null)
 {
     public async Task RunAsync()
     {
         ui.Show("homunculus - type /help for commands.");
-        while (ui.ReadLine() is { } line)
+        while (ui.ReadLine(prompt?.Invoke() ?? "> ") is { } line)
         {
             var input = line.Trim();
             if (input.Length == 0) continue;

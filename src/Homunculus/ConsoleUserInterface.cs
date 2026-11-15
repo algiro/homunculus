@@ -37,7 +37,7 @@ public sealed class ConsoleUserInterface : IUserInterface
         }
     }
 
-    public string? ReadLine()
+    public string? ReadLine(string prompt)
     {
         // At the prompt ctrl-c has nothing to stop, so it explains how to quit instead of killing the program.
         ConsoleCancelEventHandler handler = (_, e) =>
@@ -45,10 +45,10 @@ public sealed class ConsoleUserInterface : IUserInterface
             e.Cancel = true;
             Console.WriteLine();
             Console.WriteLine(QuitHint(OperatingSystem.IsWindows()));
-            Console.Write("> ");
+            Console.Write(prompt);
         };
 
-        Console.Write("> ");
+        Console.Write(prompt);
         Console.CancelKeyPress += handler;
         try
         {

@@ -67,7 +67,7 @@ public class ToolRunnerTests
         Start("effect");
         _app.Ui.Answers('n');
 
-        var result = await Run("run_command", """{"command":"echo hi"}""");
+        var result = await Run("run_command", """{"program":"dotnet","args":["--version"]}""");
 
         Assert.That(result, Is.EqualTo("Refused by the user."));
     }

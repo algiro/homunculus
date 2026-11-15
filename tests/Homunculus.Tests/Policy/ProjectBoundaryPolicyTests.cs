@@ -50,7 +50,7 @@ public class ProjectBoundaryPolicyTests
 
     [Test]
     public async Task AsksTheWrappedPolicyForCommands() =>
-        Assert.That(await Evaluate(new RunCommandTool(_project.Location, TimeSpan.FromSeconds(1)), """{"command":"echo hi"}"""),
+        Assert.That(await Evaluate(new RunCommandTool(_project.Location, TimeSpan.FromSeconds(1)), """{"program":"dotnet","args":["--version"]}"""),
             Is.EqualTo(Verdict.Deny));
 
     [Test]

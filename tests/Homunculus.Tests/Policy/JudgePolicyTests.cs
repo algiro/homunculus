@@ -10,7 +10,7 @@ public class JudgePolicyTests
     private static readonly ITool Command = new RunCommandTool(new ProjectDirectory("."), TimeSpan.FromSeconds(1));
 
     private static Task<Verdict> Judge(ScriptedModel model) =>
-        new JudgePolicy(model).EvaluateAsync(Command, Json.Parse("""{"command":"rm -rf /"}"""), CancellationToken.None);
+        new JudgePolicy(model).EvaluateAsync(Command, Json.Parse("""{"program":"git","args":["clean","-fdx"]}"""), CancellationToken.None);
 
     [TestCase("allow", Verdict.Allow)]
     [TestCase("Allow.", Verdict.Allow)]
@@ -36,7 +36,7 @@ public class JudgePolicyTests
 
         var question = model.LastConversation[^1].Content;
         Assert.That(model.LastConversation[0].Role, Is.EqualTo(Role.System));
-        Assert.That(question, Does.Contain("run_command").And.Contain("rm -rf /"));
+        Assert.That(question, Does.Contain("run_command").And.Contain("""{"program":"git","args":["clean","-fdx"]}"""));
         Assert.That(model.ToolLists[0], Is.Empty);
     }
 }

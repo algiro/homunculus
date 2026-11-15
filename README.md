@@ -15,9 +15,9 @@ Inspired by [konacode](https://github.com/bbossola/konacode).
 ## What it does today
 
 - **Agent loop:** sends the conversation to the model, runs the tools it asks for, and repeats until the model answers with text.
-- **Six tools:** list, read, edit and delete files, run a shell command, and record a plan ([details](#tools)).
+- **Six tools:** list, read, edit and delete files, run a program (no shell), and record a plan ([details](#tools)).
 - **Any OpenAI-compatible server:** OpenAI itself, or a local model through Ollama and similar ([example](#using-a-local-model)).
-- **Approvals:** file access outside the project folder always asks you; commands follow a selectable mode, including a second "judge" model ([details](#approvals)).
+- **Approvals:** file access outside the project folder, and any program not on the allowed list, always ask you; other commands follow a selectable mode, including a second "judge" model, shown in the prompt ([details](#approvals)).
 - **Reasoning:** the thinking that reasoning models report is shown in gray with a `[thinking]` prefix on every line (can be turned off).
 - **Iteration limit with a question:** at the limit the agent asks whether to continue, or you can remove the limit.
 - **Token and time tracking:** tokens after each answer, the time of every model call, and session totals per source with `/usage`.
@@ -98,6 +98,7 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_MAX_ITERATIONS` | 8; model calls per message before you are asked whether to continue (each `y` allows another batch of the same size). `unlimited`, `none` or `0` never asks |
 | `HOMUNCULUS_MAX_ITERATIONS_WHEN_PLANNING` | 24; the same, once the agent has made a plan |
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
+| `HOMUNCULUS_ALLOWED_PROGRAMS` | `dotnet,git`; the programs `run_command` may start under the approval mode. Any other program asks you every time. `none` allows none |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
@@ -111,7 +112,7 @@ Type a message to talk to the agent. A line that starts with `/` is a command an
 | `/help` | Lists the commands. |
 | `/tools` | Lists the tools that are loaded. |
 | `/policy` | Shows the current approval mode and the available ones. |
-| `/policy <mode>` | Sets the approval mode: `judge`, `effect` or `allow-all` ([modes](#approvals)). |
+| `/policy <mode>` | Sets the approval mode: `judge`, `effect` or `allow-all` ([modes](#approvals)). The prompt always shows the mode, such as `[judge] > `, and switching to `allow-all` prints a warning. |
 | `/usage` | Shows, per source (`agent` and `judge`) and in total, the calls, tokens and time spent waiting for the model in this session. |
 | `/clear` | Forgets the conversation and starts again from the system prompt. The usage totals are kept. |
 | `/exit` | Quits. |
@@ -124,7 +125,7 @@ While the program is running:
 | `ctrl-c` at the prompt | Does not quit; it reminds you how to: `/exit`, `Ctrl-D` (Linux/macOS), or `Ctrl-Z` then `Enter` (Windows). |
 | `Ctrl-D` / `Ctrl-Z`+`Enter` | End of input at an empty prompt: quits, like `/exit`. |
 | `y` / `n` | Answer to an approval question, or to "Continue for N more?" at the iteration limit. |
-| `a` | At an approval question: always allow that tool for the rest of the session (not offered for access outside the project). |
+| `a` | At an approval question: always allow that tool for the rest of the session. For `run_command` it covers only that exact command (same program, same arguments). Not offered for access outside the project or for a program that is not allowed. |
 
 After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 total]` shows the last model call. Calls that fail, or that the server reports no usage for, are not counted, so the totals are a lower bound.
 
@@ -136,7 +137,7 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `read_file` | Reads a text file (at most 100,000 characters). |
 | `edit_file` | Replaces the one exact occurrence of a text in a file, or creates a new file when the old text is empty. |
 | `delete_file` | Deletes a file. Directories are refused. |
-| `run_command` | Runs a shell command in the project folder (`cmd.exe` on Windows, `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. |
+| `run_command` | Starts one program with a list of arguments, such as `{"program":"dotnet","args":["test"]}`, in the project folder and returns its output and exit code. No shell is involved, so `;`, `|`, `&&`, `$(...)` and redirects are plain text to the program. The program is looked up on `PATH` only, never in the project folder; on Windows only `.exe` and `.com` files run. Stops after the timeout. |
 | `plan` | Records the steps of the work ahead (at most 20 steps). Making a plan raises the iteration limit. |
 
 Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text.
@@ -145,13 +146,16 @@ Every call is announced on screen as `-> tool {arguments}` before it runs. Failu
 
 - **Inside the project**, reads and writes run freely.
 - **Outside the project**, any file read or write is always put to you first, in every mode, and each access needs its own `y`.
-- **Commands** (`run_command`) follow the mode set with `/policy`:
+- **A program that is not allowed** (anything but `HOMUNCULUS_ALLOWED_PROGRAMS`, by default `dotnet` and `git`) is always put to you first, in every mode, and each run needs its own `y`. This is what stops text the model read (a README, a comment, an issue) from getting it to run `curl`, a shell or a script on its own.
+- **Commands with an allowed program** follow the mode set with `/policy`, which the prompt always shows:
 
 | Mode | Behavior |
 |---|---|
 | `judge` (default) | A second model call decides `allow`, `deny` or `ask` for each command; `ask` comes to you. |
 | `effect` | Always asks you. |
-| `allow-all` | Never asks (access outside the project still does). |
+| `allow-all` | Never asks for file tools inside the project or allowed programs; everything above still asks. |
+
+An allowed program can still run code: `dotnet build` runs whatever a project file the model wrote tells it to, and a git alias can start a shell. The allowed list narrows what can run unasked; it is not a sandbox, so keep `allow-all` for projects and files you trust.
 
 ## Debug log
 

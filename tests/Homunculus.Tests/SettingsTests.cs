@@ -20,6 +20,7 @@ public class SettingsTests
         Assert.That(settings.CommandTimeout, Is.EqualTo(TimeSpan.FromSeconds(600)));
         Assert.That(settings.Iterations.Normal, Is.EqualTo(8));
         Assert.That(settings.Iterations.WhenPlanning, Is.EqualTo(24));
+        Assert.That(settings.AllowedPrograms, Is.Null);
     }
 
     [Test]
@@ -100,4 +101,14 @@ public class SettingsTests
     [TestCase("", true)]
     public void ReadsTheShowReasoningSwitch(string value, bool expected) =>
         Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHOW_REASONING", value)).ShowReasoning, Is.EqualTo(expected));
+
+    [Test]
+    public void ReadsTheAllowedProgramsAsATrimmedList() =>
+        Assert.That(
+            From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_ALLOWED_PROGRAMS", "dotnet, npm ,")).AllowedPrograms,
+            Is.EqualTo(new[] { "dotnet", "npm" }));
+
+    [Test]
+    public void AllowsNoProgramWhenSetToNone() =>
+        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_ALLOWED_PROGRAMS", "none")).AllowedPrograms, Is.Empty);
 }

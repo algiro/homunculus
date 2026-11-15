@@ -100,6 +100,30 @@ public class ReplTests
     }
 
     [Test]
+    public async Task ThePromptShowsTheApprovalMode()
+    {
+        await Run(new ScriptedModel(), "/policy allow-all");
+
+        Assert.That(_app.Ui.Prompts.Take(2), Is.EqualTo(new[] { "[effect] > ", "[allow-all] > " }));
+    }
+
+    [Test]
+    public async Task WarnsWhenSwitchingToAllowAll()
+    {
+        await Run(new ScriptedModel(), "/policy allow-all");
+
+        Assert.That(_app.Ui.Output[^1], Does.StartWith("Warning: in allow-all mode").And.Contain("dotnet, git"));
+    }
+
+    [Test]
+    public async Task DoesNotWarnForTheOtherModes()
+    {
+        await Run(new ScriptedModel(), "/policy judge", "/policy");
+
+        Assert.That(_app.Ui.AllOutput, Does.Not.Contain("Warning"));
+    }
+
+    [Test]
     public async Task RejectsAnUnknownPolicy()
     {
         await Run(new ScriptedModel(), "/policy bogus");
