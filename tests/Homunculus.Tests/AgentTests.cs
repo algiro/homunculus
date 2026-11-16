@@ -40,14 +40,28 @@ public class AgentTests
     }
 
     [Test]
-    public async Task ShowsTheTokensOfTheLastCallAfterTheAnswer()
+    public async Task SumsUpTheTurnAfterTheAnswer()
     {
         var usage = new TokenUsage(Input: 10, Output: 5, Total: 15);
-        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Text("done")) { Usage = usage };
+        var model = new ScriptedModel(Replies.Tool("echo"), Replies.Tool("echo"), Replies.Text("done")) { Usage = usage };
 
         await Ask(Build(model));
 
-        Assert.That(_ui.Usages, Is.EqualTo(new[] { usage }));
+        var turn = _ui.Summaries.Single();
+        Assert.That(turn.Usage, Is.EqualTo(new TokenUsage(30, 15, 45)), "the tokens of every call in the turn");
+        Assert.That(turn.ToolCalls, Is.EqualTo(2));
+        Assert.That(turn.Elapsed, Is.GreaterThanOrEqualTo(TimeSpan.Zero));
+    }
+
+    [Test]
+    public async Task SumsUpATurnThatHitTheIterationLimitToo()
+    {
+        var model = new ScriptedModel(Enumerable.Repeat(Replies.Tool("echo"), 10).ToArray());
+
+        _ui.Answers('n');
+        await Ask(Build(model, limits: new IterationLimits(2, 2)));
+
+        Assert.That(_ui.Summaries, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -55,7 +69,7 @@ public class AgentTests
     {
         await Ask(Build(new ScriptedModel(Replies.Text("hello"))));
 
-        Assert.That(_ui.Usages, Is.Empty);
+        Assert.That(_ui.Summaries.Single().Usage, Is.Null);
     }
 
     [Test]

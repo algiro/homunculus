@@ -37,7 +37,7 @@ public sealed class App
         var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, allowed);
 
         Runner = new ToolRunner(Tools, approvals, ui, log, project.Root);
-        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log);
+        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log, settings.Model);
 
         var commands = new CommandRegistry();
         commands

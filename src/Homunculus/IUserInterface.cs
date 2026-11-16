@@ -1,5 +1,3 @@
-using Homunculus.Llm;
-
 namespace Homunculus;
 
 public interface IUserInterface
@@ -12,8 +10,11 @@ public interface IUserInterface
     /// <summary>Shows the thinking a reasoning model reported before its answer or tool call.</summary>
     void ShowReasoning(string reasoning);
 
-    /// <summary>Shows what the model call that produced the last answer cost.</summary>
-    void ShowUsage(TokenUsage usage);
+    /// <summary>Shows the model's answer, which is usually markdown.</summary>
+    void ShowAnswer(string markdown);
+
+    /// <summary>Shows what the turn that just ended used, on one line.</summary>
+    void ShowTurnSummary(TurnSummary turn);
 
     /// <summary>Shows that a tool is about to run, by what it works on, such as "src/App.cs" or "dotnet test".</summary>
     void ShowToolCall(string tool, string summary);

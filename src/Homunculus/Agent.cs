@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Homunculus.Llm;
 using Homunculus.Logging;
 using Homunculus.Tools;
@@ -13,7 +14,8 @@ public sealed class Agent(
     IterationLimits limits,
     bool showReasoning,
     IUserInterface ui,
-    IEventLog? log = null)
+    IEventLog? log = null,
+    string? modelName = null)
 {
     private readonly IEventLog _log = log ?? NullEventLog.Instance;
 
@@ -29,12 +31,17 @@ public sealed class Agent(
         var planned = false;
         var nudged = false;
         var budget = new IterationBudget(limits, ui, _log);
+        var started = Stopwatch.GetTimestamp();
+        TokenUsage? used = null;
+        var toolCalls = 0;
+        void Summarise() => ui.ShowTurnSummary(new TurnSummary(modelName, used, toolCalls, Stopwatch.GetElapsedTime(started)));
 
         while (budget.TryTakeTurn(planned))
         {
             Reply reply;
             using (ui.ShowProgress("thinking"))
                 reply = await model.CompleteAsync(conversation, specs, cancellation);
+            if (reply.Usage is { } callUsage) used = used is null ? callUsage : used.Plus(callUsage);
             if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
             if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
 
@@ -57,6 +64,7 @@ public sealed class Agent(
                 {
                     _log.Write("turn_end", new { reason = "empty_after_nudge" });
                     ui.Show("The model returned no answer.");
+                    Summarise();
                     return;
                 }
 
@@ -70,8 +78,8 @@ public sealed class Agent(
 
             if (!reply.Message.HasToolCalls)
             {
-                ui.Show(reply.Message.Content!);
-                if (reply.Usage is { } usage) ui.ShowUsage(usage);
+                ui.ShowAnswer(reply.Message.Content!);
+                Summarise();
                 _log.Write("turn_end", new { reason = "answer", iterations = budget.Used });
                 return;
             }
@@ -79,12 +87,14 @@ public sealed class Agent(
             foreach (var call in reply.Message.ToolCalls!)
             {
                 planned |= call.Name == PlanTool.ToolName;
+                toolCalls++;
                 conversation.Add(Message.ToolResult(call.Id, await runner.RunAsync(call, cancellation)));
             }
         }
 
         _log.Write("turn_end", new { reason = "iteration_limit" });
         ui.Show("Stopped: iteration limit reached for this message.");
+        Summarise();
     }
 
     private static bool IsEmpty(Message message) => !message.HasToolCalls && string.IsNullOrWhiteSpace(message.Content);
