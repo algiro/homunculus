@@ -1,22 +1,125 @@
+using System.Diagnostics;
 using Homunculus.Llm;
 
 namespace Homunculus;
 
 public sealed class ConsoleUserInterface : IUserInterface
 {
+    /// <summary>How much this console can draw, worked out once: the banner, the tool lines and the progress all follow it.</summary>
+    private readonly BannerStyle _style;
+
+    public ConsoleUserInterface()
+    {
+        _style = BannerStyleFor(Console.IsOutputRedirected, Environment.GetEnvironmentVariable);
+        if (_style != BannerStyle.Text)
+        {
+            // Box drawing, block letters and the progress frames need UTF-8; a Windows console may still be on an old code page.
+            try { Console.OutputEncoding = System.Text.Encoding.UTF8; }
+            catch (IOException) { }
+        }
+    }
+
     public void Show(string text) => Console.WriteLine(text);
 
     public void ShowBanner(BannerDetails details)
     {
-        if (!Console.IsOutputRedirected)
-        {
-            // The banner's block letters and box need UTF-8; a Windows console may still be on an old code page.
-            try { Console.OutputEncoding = System.Text.Encoding.UTF8; }
-            catch (IOException) { }
-        }
-
-        Console.WriteLine(Banner.Render(details, BannerStyleFor(Console.IsOutputRedirected, Environment.GetEnvironmentVariable), Width()));
+        Console.WriteLine(Banner.Render(details, _style, Width()));
         Console.WriteLine();
+    }
+
+    public void ShowToolCall(string tool, string summary) => Console.WriteLine(ToolCallLine(tool, summary, _style));
+
+    public void ShowToolResult(ToolOutcome outcome) => Console.WriteLine(ToolResultLine(outcome, _style));
+
+    private const string Reset = "\e[0m";
+    private const string Bold = "\e[1m";
+    private const string Green = "\e[38;2;95;207;159m";
+    private const string Grey = "\e[38;2;138;131;153m";
+    private const string Red = "\e[38;2;239;108;108m";
+
+    /// <summary>"● read_file  src/App.cs": a dot and the tool's name, then what it works on.</summary>
+    public static string ToolCallLine(string tool, string summary, BannerStyle style)
+    {
+        var gap = summary.Length == 0 ? "" : "  ";
+        return style switch
+        {
+            BannerStyle.Color => $"{Green}●{Reset} {Bold}{tool}{Reset}{gap}{summary}",
+            BannerStyle.Art => $"● {tool}{gap}{summary}",
+            _ => $"-> {tool}{gap}{summary}",
+        };
+    }
+
+    /// <summary>"  ⎿  12 lines · 1.3s" under the call: grey when it went well, red when it failed.</summary>
+    public static string ToolResultLine(ToolOutcome outcome, BannerStyle style)
+    {
+        var text = ToolDisplay.Duration(outcome.Elapsed) is { } duration ? $"{outcome.Summary} · {duration}" : outcome.Summary;
+        return style switch
+        {
+            BannerStyle.Color => $"  {Grey}⎿{Reset}  {(outcome.Failed ? Red : Grey)}{text}{Reset}",
+            BannerStyle.Art => $"  └  {text}",
+            _ => $"   {(outcome.Failed ? "!" : "=")} {text}",
+        };
+    }
+
+    /// <summary>
+    /// A spinner with the activity and the seconds so far, drawn over itself on one line and wiped when disposed. It waits a
+    /// moment before it appears, so quick steps do not flicker. Output that is not a console gets nothing.
+    /// </summary>
+    public IDisposable ShowProgress(string activity)
+    {
+        if (_style == BannerStyle.Text) return new Subscription(() => { });
+
+        var stop = new CancellationTokenSource();
+        var started = Stopwatch.GetTimestamp();
+        var drawn = false;
+        var spinner = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), stop.Token);
+                using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+                for (var frame = 0; !stop.IsCancellationRequested; frame++)
+                {
+                    lock (_console)
+                    {
+                        if (stop.IsCancellationRequested) break;
+                        Console.Write(ProgressLine(activity, frame, Stopwatch.GetElapsedTime(started), _style));
+                        drawn = true;
+                    }
+
+                    await timer.WaitForNextTickAsync(stop.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+
+        return new Subscription(() =>
+        {
+            lock (_console)
+            {
+                stop.Cancel();
+                if (drawn) Console.Write(_style == BannerStyle.Color ? "\r\e[2K\e[?25h" : "\r" + new string(' ', Width() - 1) + "\r");
+            }
+
+            spinner.Wait(TimeSpan.FromSeconds(1));
+            stop.Dispose();
+        });
+    }
+
+    private readonly Lock _console = new();
+
+    private static readonly string[] ColourFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    private static readonly string[] PlainFrames = ["|", "/", "-", "\\"];
+
+    /// <summary>One frame of the progress line, starting with a carriage return so the next frame draws over it.</summary>
+    public static string ProgressLine(string activity, int frame, TimeSpan elapsed, BannerStyle style)
+    {
+        var seconds = elapsed >= TimeSpan.FromSeconds(1) ? $" {(int)elapsed.TotalSeconds}s" : "";
+        return style == BannerStyle.Color
+            ? $"\r\e[?25l{Green}{ColourFrames[frame % ColourFrames.Length]}{Reset} {Grey}{activity}…{seconds}{Reset}\e[K"
+            : $"\r{PlainFrames[frame % PlainFrames.Length]} {activity}...{seconds}   ";
     }
 
     /// <summary>

@@ -30,9 +30,45 @@ public class ToolRunnerTests
     {
         Start();
 
+        _app.Project.Write("src/a.txt", "hi");
+
+        await Run("read_file", """{"path":"src/a.txt"}""");
+
+        Assert.That(_app.Ui.ToolCalls.Single(), Is.EqualTo("read_file " + Path.Combine("src", "a.txt")));
+    }
+
+    [Test]
+    public async Task ShowsHowTheCallEnded()
+    {
+        Start();
+        _app.Project.Write("a.txt", "one\ntwo\nthree");
+
+        await Run("read_file", """{"path":"a.txt"}""");
+
+        Assert.That(_app.Ui.ToolResults.Single(), Has.Property("Failed").False.And.Property("Summary").EqualTo("3 lines"));
+    }
+
+    [Test]
+    public async Task ShowsProgressOnlyWhileTheToolRuns()
+    {
+        Start();
+
         await Run("list_files", "{}");
 
-        Assert.That(_app.Ui.Output.Single(), Does.Contain("list_files"));
+        Assert.That(_app.Ui.Activities, Is.EqualTo(new[] { "running" }));
+        Assert.That(_app.Ui.ProgressShowing, Is.Zero);
+    }
+
+    [Test]
+    public async Task ShowsARefusalAsAFailureWithoutProgress()
+    {
+        Start("effect");
+        _app.Ui.Answers('n');
+
+        await Run("run_command", """{"program":"dotnet","args":["--version"]}""");
+
+        Assert.That(_app.Ui.ToolResults.Single(), Is.EqualTo(new ToolOutcome(true, "Refused by the user.", _app.Ui.ToolResults.Single().Elapsed)));
+        Assert.That(_app.Ui.Activities, Is.Empty);
     }
 
     [Test]

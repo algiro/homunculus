@@ -27,7 +27,17 @@ public sealed class FakeUserInterface : IUserInterface
         return this;
     }
 
-    public void Show(string text) => Output.Add(text);
+    public void Show(string text)
+    {
+        NothingInProgress(text);
+        Output.Add(text);
+    }
+
+    /// <summary>On a console the progress line would be written over, so nothing may be shown or asked while it is there.</summary>
+    private void NothingInProgress(string what)
+    {
+        if (ProgressShowing > 0) throw new InvalidOperationException("Shown while progress was showing: " + what);
+    }
 
     public List<BannerDetails> Banners { get; } = [];
 
@@ -37,11 +47,34 @@ public sealed class FakeUserInterface : IUserInterface
 
     public void ShowUsage(TokenUsage usage) => Usages.Add(usage);
 
+    /// <summary>Each tool call announced, as "tool summary".</summary>
+    public List<string> ToolCalls { get; } = [];
+
+    public List<ToolOutcome> ToolResults { get; } = [];
+
+    /// <summary>Every activity shown as under way, in order.</summary>
+    public List<string> Activities { get; } = [];
+
+    /// <summary>How many progress indicators are showing now; it must be back to zero before anything is asked.</summary>
+    public int ProgressShowing { get; private set; }
+
+    public void ShowToolCall(string tool, string summary) => ToolCalls.Add($"{tool} {summary}");
+
+    public void ShowToolResult(ToolOutcome outcome) => ToolResults.Add(outcome);
+
+    public IDisposable ShowProgress(string activity)
+    {
+        Activities.Add(activity);
+        ProgressShowing++;
+        return new Subscription(() => ProgressShowing--);
+    }
+
     /// <summary>The answer letters offered with each question, such as "yna", in the same order as <see cref="Questions"/>.</summary>
     public List<string> Options { get; } = [];
 
     public char Choose(string question, string options)
     {
+        NothingInProgress(question);
         Questions.Add(question);
         Options.Add(options);
         return _choices.Count > 0 ? _choices.Dequeue() : throw new InvalidOperationException("Unexpected question: " + question);
