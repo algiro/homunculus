@@ -34,6 +34,7 @@ public static partial class ToolDisplay
             { Command: { } command } => CommandLine(command),
             { Path: { } path } => Relative(path, projectRoot) + EditSize(arguments),
             { Access: ToolAccess.Plan } => Steps(arguments),
+            { Access: ToolAccess.Network } => arguments.OptionalText("query") is { } query ? $"\"{query}\"" : arguments.OptionalText("url") ?? arguments.GetRawText(),
             _ => arguments.GetRawText(),
         };
         return Shorten(summary);

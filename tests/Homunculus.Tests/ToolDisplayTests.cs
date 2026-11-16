@@ -1,3 +1,4 @@
+using NSubstitute;
 using Homunculus.Tests.Support;
 using Homunculus.Tools;
 
@@ -36,6 +37,15 @@ public class ToolDisplayTests
     [Test]
     public void CountsThePlanSteps() =>
         Assert.That(Call(new PlanTool(), """{"steps":["read","fix"]}"""), Is.EqualTo("2 steps"));
+
+    [Test]
+    public void ShowsWhatAWebCallLooksFor()
+    {
+        using var http = new HttpClient();
+
+        Assert.That(Call(new WebFetchTool(http), """{"url":"https://example.com/weather"}"""), Is.EqualTo("https://example.com/weather"));
+        Assert.That(Call(new WebSearchTool(Substitute.For<ISearchProvider>()), """{"query":"weather in Las Palmas"}"""), Is.EqualTo("\"weather in Las Palmas\""));
+    }
 
     [Test]
     public void FallsBackToTheArgumentsWhenTheyMakeNoSense() =>
