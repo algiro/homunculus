@@ -48,8 +48,16 @@ public sealed class App
             .Add(new ClearCommand(Agent, ui))
             .Add(new ExitCommand());
         // The mode is in every prompt, so working in allow-all is never something the user has to remember.
-        Repl = new Repl(Agent, commands, ui, () => $"[{Policy.Mode}] > ");
+        Repl = new Repl(Agent, commands, ui, () => $"[{Policy.Mode}] > ", () => BannerDetailsFor(settings, project, Policy.Mode));
     }
+
+    /// <summary>The server is shown by its host, such as "localhost:11434", which says enough without the full address.</summary>
+    private static BannerDetails BannerDetailsFor(Settings settings, ProjectDirectory project, string mode) => new(
+        settings.Model,
+        Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var server) ? server.Authority : settings.BaseUrl,
+        project.Root,
+        mode,
+        settings.JudgeModel == settings.Model ? null : settings.JudgeModel);
 
     public UsageLedger Usage { get; } = new();
     public TimeLedger Time { get; } = new();
