@@ -6,6 +6,9 @@ public interface IUserInterface
 {
     void Show(string text);
 
+    /// <summary>Shows the start-up banner, as rich as the output allows.</summary>
+    void ShowBanner(BannerDetails details);
+
     /// <summary>Shows the thinking a reasoning model reported before its answer or tool call.</summary>
     void ShowReasoning(string reasoning);
 

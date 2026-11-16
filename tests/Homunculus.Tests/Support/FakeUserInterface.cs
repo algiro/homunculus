@@ -29,6 +29,10 @@ public sealed class FakeUserInterface : IUserInterface
 
     public void Show(string text) => Output.Add(text);
 
+    public List<BannerDetails> Banners { get; } = [];
+
+    public void ShowBanner(BannerDetails details) => Banners.Add(details);
+
     public void ShowReasoning(string reasoning) => Reasonings.Add(reasoning);
 
     public void ShowUsage(TokenUsage usage) => Usages.Add(usage);

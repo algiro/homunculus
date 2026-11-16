@@ -32,7 +32,8 @@ public class ReplTests
     {
         await Run(new ScriptedModel());
 
-        Assert.That(_app.Ui.Output[0], Does.Contain("/help"));
+        Assert.That(_app.Ui.Banners, Has.Count.EqualTo(1));
+        Assert.That(_app.Ui.Output, Is.Empty);
     }
 
     [Test]
@@ -97,6 +98,14 @@ public class ReplTests
 
         Assert.That(_app.Policy.Mode, Is.EqualTo("allow-all"));
         Assert.That(_app.Ui.AllOutput, Does.Contain("Policy: allow-all"));
+    }
+
+    [Test]
+    public async Task OpensWithTheBannerForThisSession()
+    {
+        await Run(new ScriptedModel());
+
+        Assert.That(_app.Ui.Banners.Single(), Is.EqualTo(new BannerDetails("model", "localhost", _app.Project.Location.Root, "effect", JudgeModel: "judge")));
     }
 
     [Test]
