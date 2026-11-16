@@ -1,5 +1,3 @@
-using Homunculus.Llm;
-
 namespace Homunculus.Tests.Support;
 
 public sealed class FakeUserInterface : IUserInterface
@@ -10,7 +8,8 @@ public sealed class FakeUserInterface : IUserInterface
 
     public List<string> Output { get; } = [];
     public List<string> Questions { get; } = [];
-    public List<TokenUsage> Usages { get; } = [];
+    public List<TurnSummary> Summaries { get; } = [];
+    public List<string> AnswersShown { get; } = [];
     public List<string> Reasonings { get; } = [];
 
     public string AllOutput => string.Join('\n', Output);
@@ -45,7 +44,14 @@ public sealed class FakeUserInterface : IUserInterface
 
     public void ShowReasoning(string reasoning) => Reasonings.Add(reasoning);
 
-    public void ShowUsage(TokenUsage usage) => Usages.Add(usage);
+    /// <summary>An answer goes to <see cref="Output"/> too, where it would appear on the console.</summary>
+    public void ShowAnswer(string markdown)
+    {
+        Show(markdown);
+        AnswersShown.Add(markdown);
+    }
+
+    public void ShowTurnSummary(TurnSummary turn) => Summaries.Add(turn);
 
     /// <summary>Each tool call announced, as "tool summary".</summary>
     public List<string> ToolCalls { get; } = [];

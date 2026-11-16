@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Homunculus.Llm;
 
 namespace Homunculus;
 
@@ -31,11 +30,6 @@ public sealed class ConsoleUserInterface : IUserInterface
 
     public void ShowToolResult(ToolOutcome outcome) => Console.WriteLine(ToolResultLine(outcome, _style));
 
-    private const string Reset = "\e[0m";
-    private const string Bold = "\e[1m";
-    private const string Green = "\e[38;2;95;207;159m";
-    private const string Grey = "\e[38;2;138;131;153m";
-    private const string Red = "\e[38;2;239;108;108m";
 
     /// <summary>"● read_file  src/App.cs": a dot and the tool's name, then what it works on.</summary>
     public static string ToolCallLine(string tool, string summary, BannerStyle style)
@@ -43,7 +37,7 @@ public sealed class ConsoleUserInterface : IUserInterface
         var gap = summary.Length == 0 ? "" : "  ";
         return style switch
         {
-            BannerStyle.Color => $"{Green}●{Reset} {Bold}{tool}{Reset}{gap}{summary}",
+            BannerStyle.Color => $"{Ansi.Green}●{Ansi.Reset} {Ansi.Bold}{tool}{Ansi.Reset}{gap}{summary}",
             BannerStyle.Art => $"● {tool}{gap}{summary}",
             _ => $"-> {tool}{gap}{summary}",
         };
@@ -55,7 +49,7 @@ public sealed class ConsoleUserInterface : IUserInterface
         var text = ToolDisplay.Duration(outcome.Elapsed) is { } duration ? $"{outcome.Summary} · {duration}" : outcome.Summary;
         return style switch
         {
-            BannerStyle.Color => $"  {Grey}⎿{Reset}  {(outcome.Failed ? Red : Grey)}{text}{Reset}",
+            BannerStyle.Color => $"  {Ansi.Grey}⎿{Ansi.Reset}  {(outcome.Failed ? Ansi.Red : Ansi.Grey)}{text}{Ansi.Reset}",
             BannerStyle.Art => $"  └  {text}",
             _ => $"   {(outcome.Failed ? "!" : "=")} {text}",
         };
@@ -118,7 +112,7 @@ public sealed class ConsoleUserInterface : IUserInterface
     {
         var seconds = elapsed >= TimeSpan.FromSeconds(1) ? $" {(int)elapsed.TotalSeconds}s" : "";
         return style == BannerStyle.Color
-            ? $"\r\e[?25l{Green}{ColourFrames[frame % ColourFrames.Length]}{Reset} {Grey}{activity}…{seconds}{Reset}\e[K"
+            ? $"\r\e[?25l{Ansi.Green}{ColourFrames[frame % ColourFrames.Length]}{Ansi.Reset} {Ansi.Grey}{activity}…{seconds}{Ansi.Reset}\e[K"
             : $"\r{PlainFrames[frame % PlainFrames.Length]} {activity}...{seconds}   ";
     }
 
@@ -169,7 +163,13 @@ public sealed class ConsoleUserInterface : IUserInterface
     public static string PrefixLines(string reasoning) =>
         string.Join(Environment.NewLine, reasoning.ReplaceLineEndings("\n").Split('\n').Select(line => $"[thinking] {line}".TrimEnd()));
 
-    public void ShowUsage(TokenUsage usage) => Console.WriteLine($"[tokens: {UsageText.Describe(usage)}]");
+    public void ShowAnswer(string markdown) => Console.WriteLine(Markdown.Render(markdown, _style, Width()));
+
+    public void ShowTurnSummary(TurnSummary turn) => Console.WriteLine(TurnSummaryLine(turn, _style));
+
+    /// <summary>The turn's summary, dim so it reads as a footnote to the answer.</summary>
+    public static string TurnSummaryLine(TurnSummary turn, BannerStyle style) =>
+        style == BannerStyle.Color ? $"{Ansi.Grey}{UsageText.Describe(turn)}{Ansi.Reset}" : $"[{UsageText.Describe(turn)}]";
 
     public char Choose(string question, string options)
     {
