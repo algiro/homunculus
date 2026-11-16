@@ -32,7 +32,9 @@ public sealed class Agent(
 
         while (budget.TryTakeTurn(planned))
         {
-            var reply = await model.CompleteAsync(conversation, specs, cancellation);
+            Reply reply;
+            using (ui.ShowProgress("thinking"))
+                reply = await model.CompleteAsync(conversation, specs, cancellation);
             if (showReasoning && reply.Reasoning is { } reasoning) ui.ShowReasoning(reasoning);
             if (reply.Elapsed is { } elapsed) ui.Show($"     model took {UsageText.Describe(elapsed)}");
 

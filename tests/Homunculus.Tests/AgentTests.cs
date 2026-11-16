@@ -206,6 +206,15 @@ public class AgentTests
     }
 
     [Test]
+    public async Task ShowsItIsThinkingDuringEveryModelCall()
+    {
+        await Ask(Build(new ScriptedModel(Replies.Tool("echo"), Replies.Text("done"))));
+
+        Assert.That(_ui.Activities.Where(a => a == "thinking"), Has.Exactly(2).Items);
+        Assert.That(_ui.ProgressShowing, Is.Zero);
+    }
+
+    [Test]
     public async Task ShowsNoTimeWhenNothingMeasuredIt()
     {
         await Ask(Build(new ScriptedModel(Replies.Text("done"))));

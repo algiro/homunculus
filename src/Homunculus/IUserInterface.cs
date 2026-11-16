@@ -15,6 +15,15 @@ public interface IUserInterface
     /// <summary>Shows what the model call that produced the last answer cost.</summary>
     void ShowUsage(TokenUsage usage);
 
+    /// <summary>Shows that a tool is about to run, by what it works on, such as "src/App.cs" or "dotnet test".</summary>
+    void ShowToolCall(string tool, string summary);
+
+    /// <summary>Shows how the tool call announced last ended.</summary>
+    void ShowToolResult(ToolOutcome outcome);
+
+    /// <summary>Shows that something is under way, such as "thinking", until the result is disposed.</summary>
+    IDisposable ShowProgress(string activity);
+
     /// <summary>Asks a question and returns one of the option letters (y = yes, n = no, a = always).</summary>
     char Choose(string question, string options);
 
