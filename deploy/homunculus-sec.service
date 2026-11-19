@@ -1,0 +1,28 @@
+[Unit]
+Description=homunculus-sec: log watcher that alerts on Telegram and blocks IPs with ufw after approval
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=homunculus-sec
+Group=homunculus-sec
+# adm can read /var/log/auth.log and the nginx logs on Ubuntu.
+SupplementaryGroups=adm
+# The bot token lives here (chmod 600, owned by root). systemd reads it before dropping privileges.
+EnvironmentFile=/etc/homunculus-sec/env
+ExecStart=/opt/homunculus-sec/homunculus-sec /etc/homunculus-sec/config.json
+Restart=on-failure
+RestartSec=5
+StateDirectory=homunculus-sec
+
+# Hardening that does not get in the way of "sudo ufw". NoNewPrivileges and ProtectSystem are deliberately NOT set:
+# the first would make sudo unusable, the second would make /etc/ufw read-only for the sudo child process.
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target

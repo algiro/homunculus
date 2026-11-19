@@ -1,0 +1,25 @@
+{
+  // Where the logs are. These are the Ubuntu defaults.
+  "nginxAccessLog": "/var/log/nginx/access.log",
+  "nginxErrorLog": "/var/log/nginx/error.log",
+  "authLog": "/var/log/auth.log",
+
+  // The bot token goes in /etc/homunculus-sec/env as HOMUNCULUS_SEC_TELEGRAM_TOKEN, not here.
+  "telegramChatId": 123456789,
+
+  // Any OpenAI-compatible server. A local Ollama needs no real key. The model must support tool calling.
+  "modelBaseUrl": "http://localhost:11434/v1",
+  "modelName": "qwen3:8b",
+  "modelApiKey": "ollama",
+
+  // Never blocked, whatever the model says. Loopback and the private ranges are always protected already.
+  // Put your own IPs here, and the address ranges of any CDN or proxy in front of nginx.
+  "neverBlock": ["203.0.113.10", "198.51.100.0/24"],
+
+  "statePath": "/var/lib/homunculus-sec/blocks.json",
+  "eventLogPath": "/var/lib/homunculus-sec/events.jsonl",
+  "maxBlockHours": 168,
+
+  // true: alert and ask as usual, but never run a firewall command.
+  "dryRun": true
+}

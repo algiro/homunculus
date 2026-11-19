@@ -68,4 +68,18 @@ public class SecSettingsTests
 
         Assert.That(settings.NeverBlock, Is.EqualTo(new[] { "1.2.3.4", "10.9.0.0/16" }));
     }
+
+    [Test]
+    public void TheShippedExampleConfigurationIsValid()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "deploy", "config.example.json"))) dir = dir.Parent;
+        Assert.That(dir, Is.Not.Null, "deploy/config.example.json not found");
+
+        var settings = SecSettings.Load(Path.Combine(dir!.FullName, "deploy", "config.example.json"), None);
+
+        Assert.That(settings.TelegramChatId, Is.Not.Zero);
+        Assert.That(settings.DryRun, Is.True);
+        Assert.That(new Homunculus.Sec.Safety.Allowlist(settings.NeverBlock).IsProtected("198.51.100.77"), Is.True);
+    }
 }

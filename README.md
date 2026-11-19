@@ -214,6 +214,10 @@ HOMUNCULUS_LOG_FILE=logs/homunculus.jsonl
 
 The file contains your prompts and file contents, so keep it private (`*.jsonl` is git-ignored). The API key is never logged.
 
+## homunculus-sec
+
+A second program in this repository, `src/Homunculus.Sec`, reuses the model client and the event log (now in `src/Homunculus.Core`) as a security watcher: it follows nginx and sshd logs, asks the model about suspicious activity, and sends an alert to Telegram. A firewall block (`ufw`) happens only after you approve it. See [docs/homunculus-sec.md](docs/homunculus-sec.md); deployment files are in `deploy/`.
+
 ## Design
 
 `Program` reads the settings and hands everything to `App`, the composition root that creates and connects every part.
