@@ -1,6 +1,6 @@
 namespace Homunculus.Logging;
 
-/// <summary>A structured debug log: one named event with its data per call. Not for the user, who has <see cref="IUserInterface"/>.</summary>
+/// <summary>A structured debug log: one named event with its data per call. Not for the user, who has the user interface.</summary>
 public interface IEventLog
 {
     void Write(string eventName, object? data = null);

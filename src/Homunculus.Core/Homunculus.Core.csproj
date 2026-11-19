@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Homunculus.Core</AssemblyName>
+    <RootNamespace>Homunculus</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Homunculus.Tests" />
+    <InternalsVisibleTo Include="Homunculus.Sec.Tests" />
+  </ItemGroup>
+
+</Project>
