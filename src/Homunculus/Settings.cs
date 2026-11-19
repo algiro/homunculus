@@ -1,4 +1,3 @@
-using Homunculus.Tools;
 
 namespace Homunculus;
 
@@ -13,7 +12,6 @@ public sealed record Settings(
     bool ShowReasoning = true,
     string? LogFile = null,
     IReadOnlyList<string>? AllowedPrograms = null,
-    Shell? Shell = null,
     string? ReasoningEffort = null,
     string? JudgeReasoningEffort = null,
     string? CheckCommand = null,
@@ -62,9 +60,6 @@ public sealed record Settings(
             Env("HOMUNCULUS_LOG_FILE"),
             Env("HOMUNCULUS_ALLOWED_PROGRAMS") is { } programs
                 ? IsUnlimited(programs) ? [] : programs.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                : null,
-            Env("HOMUNCULUS_SHELL") is { } shell
-                ? Shell.Named(shell) ?? throw new InvalidOperationException($"HOMUNCULUS_SHELL must be {Shell.Choices}, not '{shell}'.")
                 : null,
             Effort("HOMUNCULUS_REASONING_EFFORT"),
             Effort("HOMUNCULUS_JUDGE_REASONING_EFFORT"),

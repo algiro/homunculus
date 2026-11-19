@@ -15,7 +15,7 @@ Inspired by [konacode](https://github.com/bbossola/konacode).
 ## What it does today
 
 - **Agent loop:** sends the conversation to the model, runs the tools it asks for, and repeats until the model answers with text.
-- **Ten tools:** list, find (`glob`), search (`grep`), read, create (`write_file`), edit, insert into and delete files, run a program (no shell), and record a plan ([details](#tools)).
+- **Twelve tools:** list, find (`glob`), search (`grep`), read, create (`write_file`), edit, insert into and delete files, run a program (no shell), record a plan, and search and read the web (`web_search`, `web_fetch`) ([details](#tools)).
 - **Any OpenAI-compatible server:** OpenAI itself, or a local model through Ollama and similar ([example](#using-a-local-model)).
 - **Approvals:** file access outside the project folder, and any program not on the allowed list, always ask you; other commands follow a selectable mode, including a second "judge" model, shown in the prompt ([details](#approvals)).
 - **Reasoning:** the thinking that reasoning models report is shown in gray with a `[thinking]` prefix on every line (can be turned off).
@@ -100,11 +100,11 @@ Everything is configured with environment variables.
 | `HOMUNCULUS_COMMAND_TIMEOUT_SECONDS` | 600 |
 | `HOMUNCULUS_ALLOWED_PROGRAMS` | `dotnet,git`; the programs `run_command` may start under the approval mode. Any other program asks you every time. `none` allows none |
 | `HOMUNCULUS_TOOLS` | all tools; a comma-separated list such as `list_files,read_file` loads only those (the `plan` tool is always loaded) |
-| `HOMUNCULUS_SHELL` | detected: PowerShell 7, else Windows PowerShell, else `cmd.exe` on Windows, `sh` elsewhere; set `pwsh`, `powershell`, `cmd` or `sh` to force one |
 | `HOMUNCULUS_REASONING_EFFORT` | not sent; `none`, `low`, `medium` or `high` is sent as `reasoning_effort` to the agent model. `none` turns thinking off on servers that support it (Ollama does), which makes small reasoning models much faster |
 | `HOMUNCULUS_JUDGE_REASONING_EFFORT` | not sent; the same for the judge model. Leave it unset for small models: without thinking they tend to answer `deny` to routine commands such as `dotnet test` |
-| `HOMUNCULUS_CHECK_COMMAND` | found for the project (see [Check command](#check-command)); set it to your own command line, or to `off` for no check. The check runs after every change to a file and its verdict is added to the tool result, with the same shell and time limit as `run_command`; you see `check: passed` or `check: failed` on screen. An edit to an existing file the agent did not create that turns a passing build into a failing one, or adds errors to a build that was already failing, is undone (see `HOMUNCULUS_CHECK_REVERT`) |
+| `HOMUNCULUS_CHECK_COMMAND` | found for the project (see [Check command](#check-command)); set it to your own command line, or to `off` for no check. The check runs after every change to a file and its verdict is added to the tool result, without a shell and with the same time limit as `run_command` (the command line is split into a program on `PATH` and its arguments; double quotes group an argument with spaces); you see `check: passed` or `check: failed` on screen. An edit to an existing file the agent did not create that turns a passing build into a failing one, or adds errors to a build that was already failing, is undone (see `HOMUNCULUS_CHECK_REVERT`) |
 | `HOMUNCULUS_CHECK_REVERT` | `true`; with a check command, `false` only reports a failing check and keeps the edit. Undoing costs one extra check run, and only when a check fails: the file is put back and the check runs again. The undo stays if the build recovers, or if the edit had added errors the project did not have (errors are compared without their line numbers, and a build's totals line is ignored); otherwise the edit is put back. Files the agent created itself, new files and deletions are never undone |
+| `HOMUNCULUS_SEARCH_API_KEY` | none: `web_search` uses DuckDuckGo; set a Brave Search API key to use Brave instead |
 | `HOMUNCULUS_SHOW_REASONING` | `true`; `false` hides the thinking that reasoning models report (`reasoning` / `reasoning_content`) |
 | `HOMUNCULUS_LOG_FILE` | off; a path such as `logs/homunculus.jsonl` turns on the [debug log](#debug-log) |
 
@@ -147,8 +147,10 @@ After each answer a line such as `[tokens: 554 in (547 cached), 111 out, 665 tot
 | `edit_file` | Replaces the one exact occurrence of a text in a file (refusing an edit whose old and new text are identical), or creates a new file when the old text is empty (`write_file` is simpler for that). When a failed edit cannot find its text it quotes the first line that is missing and the closest real one; when a successful edit removes a name from the file (a line replaced instead of added to) it says so. Pointing it at a directory says so too, and a new file gets a reminder to read the files it builds on first: the unread files of the same kind (same extension) named after a name its code uses (`ICommand` for `: ICommand`) in its folder or above, else any unread neighbour. |
 | `insert_lines` | Inserts lines before or after an existing line (`line`; `position` is `after` by default), for example to register something next to its siblings. The line is matched ignoring indentation, the new lines take its indentation, the file's line endings are kept, and the result shows the lines around the insertion. An anchor can also be several consecutive lines (the text goes after the last one, or before the first). An anchor that is not in the file gets the closest real line; one that matches several places gets their line numbers. |
 | `delete_file` | Deletes a file. Directories are refused. Deleting a file the agent did not create itself in this session is always put to you first. |
-| `run_command` | Runs a command line in the project folder (PowerShell 7 on Windows, else Windows PowerShell, else `cmd.exe`; `/bin/sh` on Linux) and returns its output and exit code. Stops after the timeout. Output beyond 20,000 characters is cut in the middle, keeping the start and the end (where a build or test run prints what went wrong, then the exit code). The tool description tells the model which shell and operating system it got. Its description tells the model not to create or edit files with it, since those changes would escape the check, the undo and the end-of-turn list. |
+| `run_command` | Starts one program with a list of arguments, such as `{"program":"dotnet","args":["test"]}`, in the project folder and returns its output and exit code. No shell is involved, so `;`, `|`, `&&`, `$(...)` and redirects are plain text to the program. The program is looked up on `PATH` only, never in the project folder; on Windows only `.exe` and `.com` files run. Stops after the timeout. Output beyond 20,000 characters is cut in the middle, keeping the start and the end (where a build or test run prints what went wrong, then the exit code). Its description tells the model not to create or edit files with it, since those changes would escape the check, the undo and the end-of-turn list. |
 | `plan` | Records the steps of the work ahead (at most 20 steps) and shows them to you each time they change. Making a plan raises the iteration limit. |
+| `web_search` | Searches the web (DuckDuckGo, or Brave with `HOMUNCULUS_SEARCH_API_KEY`) and returns titles, links and snippets. Used for anything the project cannot answer, such as the weather, news or documentation. |
+| `web_fetch` | Reads a web page as plain text (at most 30 seconds), for when the search snippets lack the answer. |
 
 Every call is announced on screen as `-> tool {arguments}` before it runs. Failures a model can act on (file not found, locked file, refused) come back to it as text, and a failed call also shows an `<- Error: ...` line so you can see what really happened. If the model repeats the exact same failing or refused call, it is told so the second time, and the third time the turn stops with a message instead of looping. A refusal also tells the model not to retry it or work around it.
 
@@ -158,7 +160,7 @@ At the end of every message that changed files, the files are listed (`created`,
 
 A check is a command that proves the project still compiles. It runs after every change to a file (create, edit, insert, delete), and its verdict is added to the tool's result: `Check passed.`, or the first error lines (with their source excerpt, and paths starting at the project) when it fails. A model that wrote something wrong then hears about it at once.
 
-By default the command is **found for you** from the files in the project folder (only the top folder is looked at, and only a tool that is on the `PATH` is used). The first match wins:
+By default the command is **found for you** from the files in the project folder (only the top folder is looked at, and only a program `run_command` could start is used: one on the `PATH`, outside the project, and on Windows an `.exe` or `.com`, so `npm` and `npx`, which are batch files there, are not). The first match wins:
 
 | Found in the project folder | Command |
 |---|---|
@@ -169,11 +171,11 @@ By default the command is **found for you** from the files in the project folder
 | `package.json` with a `typecheck`, `type-check` or `check` script, and `node_modules` | `npm run <script> --silent` |
 | `pyproject.toml`, `setup.py`, `setup.cfg`, `requirements.txt`, `Pipfile` or a `.py` file | `python -m compileall` over the project, skipping `.venv`, `venv`, `node_modules` and `.git`, with the bytecode written to a temporary folder so nothing is left in the project |
 | `pom.xml` | `mvn -q -B compile` |
-| `build.gradle(.kts)` or `settings.gradle(.kts)` | `gradlew -q classes` (the wrapper if there is one) or `gradle -q classes` |
+| `build.gradle(.kts)` or `settings.gradle(.kts)` | `gradle -q classes` (never the project's own `gradlew` wrapper: programs inside the project are not run) |
 
 The command found is named when the program starts (`check: go build ./... (found for Go; ...)`); nothing is said when none is found. They are the quick kind (a build or a type check, not the tests). The first run of some of them can be slow (`go`, `cargo`, `mvn` and `gradle` download what they need), and a build can fail to write its output while the same project is open and running in an IDE.
 
-- Set `HOMUNCULUS_CHECK_COMMAND` to use your own command instead (a linter, a quicker build, a test subset).
+- Set `HOMUNCULUS_CHECK_COMMAND` to use your own command instead (a linter, a quicker build, a test subset). It runs without a shell: write a program on the `PATH` and its arguments, with double quotes around an argument that has spaces; pipes, `&&` and redirects do not work.
 - Set it to `off` (or `none`, `false`, `no`, `0`, `disabled`) to run no check.
 - An edit to an existing file that breaks a passing build, or adds errors to a failing one, is undone: see `HOMUNCULUS_CHECK_REVERT`.
 

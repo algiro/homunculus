@@ -93,6 +93,7 @@ public sealed class Agent(
                 {
                     _log.Write("turn_end", new { reason = "cut_off_twice" });
                     ui.Show("Stopped: the model's reply was cut off twice because it ran out of room. Try /clear, or ask a narrower question.");
+                    Summarise();
                     return;
                 }
 
@@ -143,6 +144,7 @@ public sealed class Agent(
             {
                 _log.Write("turn_end", new { reason = "stuck", tool = stuck.Name });
                 ui.Show($"Stopped: the model made the same {stuck.Name} call {ToolRunner.StopAfterIdenticalFailures} times and it failed or was refused each time. Tell it what to do differently.");
+                Summarise();
                 return;
             }
         }

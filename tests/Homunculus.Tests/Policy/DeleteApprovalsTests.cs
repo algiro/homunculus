@@ -22,7 +22,7 @@ public class DeleteApprovalsTests
         _changes = new ChangedFiles(_project.Location);
         _policy = Substitute.For<IPolicy>();
         _policy.EvaluateAsync(default!, default, default).ReturnsForAnyArgs(Verdict.Allow);
-        _approvals = new Approvals(_policy, _ui, _project.Location, _changes);
+        _approvals = new Approvals(_policy, _ui, _project.Location, changes: _changes);
         _delete = new DeleteFileTool(_project.Location, _changes);
     }
 

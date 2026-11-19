@@ -216,14 +216,15 @@ public class CheckDetectorTests
     }
 
     [Test]
-    public void UsesTheGradleWrapperOfTheSystem()
+    public void NeverUsesTheProjectsOwnGradleWrapper()
     {
         _project.Write("build.gradle.kts", "");
         _project.Write("gradlew", "");
         _project.Write("gradlew.bat", "");
 
-        Assert.That(Detect(true)!.Command, Is.EqualTo(@".\gradlew.bat -q classes"));
-        Assert.That(Detect(false)!.Command, Is.EqualTo("./gradlew -q classes"));
+        Assert.That(Detect(true, "gradle")!.Command, Is.EqualTo("gradle -q classes"));
+        Assert.That(Detect(false, "gradle")!.Command, Is.EqualTo("gradle -q classes"));
+        Assert.That(Detect(true), Is.Null, "without an installed gradle there is no check");
     }
 
     [Test]
