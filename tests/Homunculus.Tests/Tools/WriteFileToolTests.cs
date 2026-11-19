@@ -118,6 +118,6 @@ public class WriteFileToolTests
         var run = new RunCommandTool(_project.Location, TimeSpan.FromSeconds(1));
 
         Assert.That(edit.Description, Does.Contain("write_file is simpler"));
-        Assert.That(run.Description, Does.Contain("Do not use it to create or edit files").And.Contain("write_file"));
+        Assert.That(run.Description, Does.Contain("never to read, list, find or change files").And.Contain("write_file").And.Contain("insert_lines"));
     }
 }

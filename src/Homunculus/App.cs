@@ -50,7 +50,7 @@ public sealed class App
             new WriteFileTool(project, Changes, Reads),
             new InsertLinesTool(project, Changes),
             new DeleteFileTool(project, Changes),
-            new RunCommandTool(project, settings.CommandTimeout, settings.Shell),
+            new RunCommandTool(project, settings.CommandTimeout, allowed),
             new PlanTool(Plan),
             new WebSearchTool(search),
             new WebFetchTool(new HttpClient { Timeout = TimeSpan.FromSeconds(30) }),
@@ -62,16 +62,19 @@ public sealed class App
             ["effect"] = new FixedPolicy(Verdict.Ask),
             ["allow-all"] = new FixedPolicy(Verdict.Allow),
         });
-        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, allowed);
+        var approvals = new Approvals(new ProjectBoundaryPolicy(project, Policy), ui, project, allowed, Changes);
 
-var check = CheckSelection.Choose(settings.CheckCommand, project.Root, checks ?? CheckDetector.ForThisMachine());
-var guard = check.Command is { } checkCommand
-    ? new ChangeGuard(
-        new ProjectCheck(checkCommand, new CommandRunner(project, settings.CommandTimeout, settings.Shell), project),
-        Changes, project, ui, log, settings.CheckRevert)
-    : null;
-Runner = new ToolRunner(Tools, approvals, ui, log, guard ?? check, project.Root);
-        Agent = new Agent(Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning, ui, log, Changes, Reads);
+        // The check runs without a shell, like run_command: its command line is split into a program found on PATH and its arguments.
+        var check = CheckSelection.Choose(settings.CheckCommand, project.Root, checks ?? CheckDetector.ForThisMachine(project));
+        var guard = check.Command is { } checkCommand
+            ? new ChangeGuard(
+                new ProjectCheck(checkCommand, new CommandRunner(project, settings.CommandTimeout), project),
+                Changes, project, log, settings.CheckRevert)
+            : null;
+        Runner = new ToolRunner(Tools, approvals, ui, log, guard, project.Root);
+        Agent = new Agent(
+            Instrument(model, "agent"), new Conversation(CodingAgentPrompt(project)), Tools, Runner, settings.Iterations, settings.ShowReasoning,
+            ui, log, Changes, Reads, settings.Model);
 
         var commands = new CommandRegistry();
         commands
@@ -82,8 +85,8 @@ Runner = new ToolRunner(Tools, approvals, ui, log, guard ?? check, project.Root)
             .Add(new PlanCommand(Plan, ui))
             .Add(new ClearCommand(Agent, Plan, ui))
             .Add(new ExitCommand());
-    // The mode is in every prompt, so working in allow-all is never something the user has to remember.
-    Repl = new Repl(Agent, commands, ui, () => $"[{Policy.Mode}] > ", () => BannerDetailsFor(settings, project, Policy.Mode));
+        // The mode is in every prompt, so working in allow-all is never something the user has to remember.
+        Repl = new Repl(Agent, commands, ui, () => $"[{Policy.Mode}] > ", () => BannerDetailsFor(settings, project, Policy.Mode), check.Note);
     }
 
     /// <summary>The server is shown by its host, such as "localhost:11434", which says enough without the full address.</summary>

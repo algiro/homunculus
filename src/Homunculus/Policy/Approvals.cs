@@ -5,12 +5,18 @@ namespace Homunculus.Policy;
 
 /// <summary>
 /// Turns the policy's verdict into a decision, asking the user when the policy is unsure or says no: a judge model can be
-/// wrong, so a denial is put to the user too, who may overrule it. Three kinds of call are always put to
-/// the user first, whatever the policy mode and whatever was approved before, and each one needs its own yes: any file access
-/// outside the project, a command that starts a program which is not on the allowed list, and deleting a file the agent did not create
-/// itself in this session. An "always" answer for a command covers that exact command only (the same program with the same arguments); for any other tool it covers the tool.
+/// wrong, so a denial is put to the user too, who may overrule it. Three kinds of call are always put to the user first,
+/// whatever the policy mode and whatever was approved before, and each one needs its own yes: any file access outside the
+/// project, a command that starts a program which is not on the allowed list, and deleting a file the agent did not create
+/// itself in this session. An "always" answer for a command covers that exact command only (the same program with the same
+/// arguments); for any other tool it covers the tool.
 /// </summary>
-public sealed class Approvals(IPolicy policy, IUserInterface ui, ProjectDirectory? project = null, AllowedPrograms? programs = null, ChangedFiles? changes = null)
+public sealed class Approvals(
+    IPolicy policy,
+    IUserInterface ui,
+    ProjectDirectory? project = null,
+    AllowedPrograms? programs = null,
+    ChangedFiles? changes = null)
 {
     private readonly HashSet<string> _alwaysAllowed = [];
 
@@ -22,11 +28,11 @@ public sealed class Approvals(IPolicy policy, IUserInterface ui, ProjectDirector
         if (project is not null && project.IsOutside(effect))
             return ConfirmOutside(tool, arguments, project);
 
-        if (effect is { Access: ToolAccess.Delete, Path: { } doomed } && changes?.WasCreatedInSession(doomed) != true)
-            return ConfirmDelete(tool, arguments, doomed);
-
         if (programs is not null && effect is { Access: ToolAccess.Command, Program: { } program } && !programs.Contains(program))
             return ConfirmProgram(tool, arguments, program, programs);
+
+        if (effect is { Access: ToolAccess.Delete, Path: { } doomed } && changes?.WasCreatedInSession(doomed) != true)
+            return ConfirmDelete(tool, arguments, doomed);
 
         var grant = GrantFor(tool, effect);
         if (_alwaysAllowed.Contains(grant))
@@ -61,6 +67,7 @@ public sealed class Approvals(IPolicy policy, IUserInterface ui, ProjectDirector
         ui.Choose($"{tool.Name} {arguments.GetRawText()} would delete {(project is null ? path : Path.GetRelativePath(project.Root, path))}, which you did not create in this session. Allow?", "yn") == 'y'
             ? null
             : "Refused by the user.";
+
     /// <summary>Never remembered: overruling the policy once does not overrule it for the next call.</summary>
     private string? ConfirmDenied(ITool tool, JsonElement arguments) =>
         ui.Choose($"The policy would deny {tool.Name} {arguments.GetRawText()}. Run it anyway?", "yn") == 'y'

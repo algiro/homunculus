@@ -40,8 +40,8 @@ public class ChangeGuardTests
             new InsertLinesTool(_project.Location, _changes),
             new DeleteFileTool(_project.Location, _changes),
         ]);
-        var approvals = new Approvals(new FixedPolicy(Verdict.Allow), _ui, _project.Location, _changes);
-        var guard = new ChangeGuard(new ProjectCheck("build", _commands, _project.Location), _changes, _project.Location, _ui, revertBrokenEdits: revert);
+        var approvals = new Approvals(new FixedPolicy(Verdict.Allow), _ui, _project.Location, changes: _changes);
+        var guard = new ChangeGuard(new ProjectCheck("build", _commands, _project.Location), _changes, _project.Location, revertBrokenEdits: revert);
         _runner = new ToolRunner(tools, approvals, _ui, null, guard);
     }
 
@@ -80,7 +80,7 @@ public class ChangeGuardTests
         Assert.That(result, Does.StartWith("Error: Not applied: this change broke the build, which passed before, so A.cs is back as it was.")
             .And.Contain(Broken).And.Contain("create a class before you register it"));
         Assert.That(_commands.Commands, Has.Count.EqualTo(2), "once to see it fail, once to see it recover");
-        Assert.That(_ui.Output, Does.Contain("  check: failed").And.Contain("  change undone"));
+        Assert.That(_ui.ToolResults[^1], Has.Property("Failed").True.And.Property("Summary").EndsWith("check failed · change undone"));
     }
 
     [Test]
@@ -111,7 +111,7 @@ public class ChangeGuardTests
 
         Assert.That(_project.Read("A.cs"), Is.EqualTo("better"), "the edit is put back after the build still fails without it");
         Assert.That(result, Does.StartWith("Edited").And.Contain("Check `build` failed"));
-        Assert.That(_ui.Output, Does.Not.Contain("  change undone"));
+        Assert.That(_ui.ToolResults.Select(r => r.Summary), Has.None.Contains("change undone"));
     }
 
     [Test]
@@ -175,7 +175,7 @@ public class ChangeGuardTests
     {
         await Run("edit_file", EditToBroken);
 
-        Assert.That(_ui.Output, Has.Some.StartWith("  <- Error: Not applied"));
+        Assert.That(_ui.ToolResults.Single(), Has.Property("Failed").True.And.Property("Summary").Contains("change undone"));
     }
 
     [Test]
@@ -238,7 +238,7 @@ public class ChangeGuardTests
             "Error: Not applied: this change added build errors that the project did not have before, so A.cs is back as it was. The new errors:\n" +
             "A.cs(1,1): error Y: worse\nMake a change that adds no new errors."));
         Assert.That(_commands.Commands, Has.Count.EqualTo(2));
-        Assert.That(_ui.Output, Does.Contain("  change undone"));
+        Assert.That(_ui.ToolResults.Select(r => r.Summary), Has.Some.Contains("change undone"));
     }
 
     [Test]
@@ -296,7 +296,7 @@ public class ChangeGuardTests
 
         Assert.That(_project.Read("C.cs"), Is.EqualTo("fixed"), "the total line says 1 Error(s) instead of 2, which is good news");
         Assert.That(result, Does.StartWith("Edited"));
-        Assert.That(_ui.Output, Does.Not.Contain("  change undone"));
+        Assert.That(_ui.ToolResults.Select(r => r.Summary), Has.None.Contains("change undone"));
     }
 
     [Test]

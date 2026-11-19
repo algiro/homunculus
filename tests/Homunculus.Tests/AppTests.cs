@@ -1,7 +1,6 @@
 using Homunculus.Commands;
 using Homunculus.Llm;
 using Homunculus.Tests.Support;
-using Homunculus.Tools;
 using NSubstitute;
 
 namespace Homunculus.Tests;
@@ -187,7 +186,7 @@ public class AppTests
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
         Assert.That(_app.Ui.Questions.Single(), Does.Contain("OUTSIDE"));
-        Assert.That(model.Conversations[1][^1].Content, Is.EqualTo("Refused by the user."));
+        Assert.That(model.Conversations[1][^1].Content, Does.StartWith("Refused by the user."));
     }
 
     [Test]
@@ -319,7 +318,7 @@ public class AppTests
     }
 
     [Test]
-    public async Task TellsTheModelWhichShellRunsItsCommands()
+    public async Task TellsTheModelItsCommandsRunWithoutAShell()
     {
         var model = new ScriptedModel(Replies.Text("hi"));
         _app = new TestApp(model);
@@ -327,7 +326,7 @@ public class AppTests
         await _app.Agent.RespondAsync("go", CancellationToken.None);
 
         var description = model.ToolLists[0].Single(tool => tool.Name == "run_command").Description;
-        Assert.That(description, Does.Contain(Shell.Detect().Name));
+        Assert.That(description, Does.Contain("No shell"));
     }
 
     [Test]
@@ -372,14 +371,4 @@ public class AppTests
         }
     }
 
-    [Test]
-    public async Task UsesTheShellChosenInTheSettings()
-    {
-        var model = new ScriptedModel(Replies.Text("hi"));
-        _app = new TestApp(model, settings: TestApp.DefaultSettings with { Shell = Shell.Named("sh") });
-
-        await _app.Agent.RespondAsync("go", CancellationToken.None);
-
-        Assert.That(model.ToolLists[0].Single(tool => tool.Name == "run_command").Description, Does.Contain("with sh in"));
-    }
 }

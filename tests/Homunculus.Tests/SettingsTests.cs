@@ -101,6 +101,7 @@ public class SettingsTests
     [TestCase("", true)]
     public void ReadsTheShowReasoningSwitch(string value, bool expected) =>
         Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHOW_REASONING", value)).ShowReasoning, Is.EqualTo(expected));
+
     [Test]
     public void ReadsTheAllowedProgramsAsATrimmedList() =>
         Assert.That(
@@ -110,24 +111,4 @@ public class SettingsTests
     [Test]
     public void AllowsNoProgramWhenSetToNone() =>
         Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_ALLOWED_PROGRAMS", "none")).AllowedPrograms, Is.Empty);
-
-    [Test]
-    public void DetectsTheShellUnlessOneIsChosen() =>
-        Assert.That(From(("OPENAI_API_KEY", "k")).Shell, Is.Null);
-
-    [Test]
-    public void ReadsTheChosenShell() =>
-        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHELL", "cmd")).Shell!.Name, Is.EqualTo("cmd.exe"));
-
-    [Test]
-    public void IgnoresAnEmptyShellChoice() =>
-        Assert.That(From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHELL", "")).Shell, Is.Null);
-
-    [Test]
-    public void RefusesAnUnknownShellAndNamesTheChoices()
-    {
-        var error = Assert.Throws<InvalidOperationException>(() => From(("OPENAI_API_KEY", "k"), ("HOMUNCULUS_SHELL", "fish")));
-
-        Assert.That(error!.Message, Does.Contain("fish").And.Contain("pwsh, powershell, cmd or sh"));
-    }
 }

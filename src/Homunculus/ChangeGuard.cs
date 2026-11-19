@@ -14,7 +14,6 @@ public sealed class ChangeGuard(
     ProjectCheck check,
     ChangedFiles changes,
     ProjectDirectory project,
-    IUserInterface ui,
     IEventLog? log = null,
     bool revertBrokenEdits = true)
 {
@@ -25,8 +24,11 @@ public sealed class ChangeGuard(
     /// <summary>What a file held before an edit, so the edit can be taken back.</summary>
     public sealed record Snapshot(string Path, byte[] Content, bool WasChangedThisTurn);
 
-    /// <summary>The result to give the model, and whether the change was undone (which makes it a failure).</summary>
-    public readonly record struct Verdict(string Result, bool Undone);
+    /// <summary>
+    /// The result to give the model, and whether the change was undone (which makes it a failure). <paramref name="Check"/> is
+    /// what the user is shown about the check, such as "check passed", or null when no check ran.
+    /// </summary>
+    public readonly record struct Verdict(string Result, bool Undone, string? Check = null, bool CheckFailed = false);
 
     /// <summary>Keeps the file's content when the call may edit an existing file of the user's; null otherwise.</summary>
     public Snapshot? Before(ITool tool, JsonElement arguments) =>
@@ -42,18 +44,16 @@ public sealed class ChangeGuard(
         if (tool.EffectOf(arguments).Access is not (ToolAccess.Write or ToolAccess.Delete)) return new Verdict(result, false);
 
         var outcome = await check.RunAsync(cancellation);
-        ui.Show(outcome.Passed ? "  check: passed" : "  check: failed");
         _log.Write("check", new { outcome.Passed });
-        if (outcome.Passed) return new Verdict(result + "\n\n" + outcome.Report, false);
+        if (outcome.Passed) return new Verdict(result + "\n\n" + outcome.Report, false, "check passed");
 
         if (snapshot is not null && !outcome.DidNotFinish && await UndoIfItCausedErrorsAsync(snapshot, outcome, cancellation) is { } undone)
         {
-            ui.Show("  change undone");
             _log.Write("change_undone", new { file = Relative(snapshot.Path) });
-            return new Verdict("Not applied: " + undone, true);
+            return new Verdict("Not applied: " + undone, true, "check failed · change undone", CheckFailed: true);
         }
 
-        return new Verdict(result + "\n\n" + outcome.Report, false);
+        return new Verdict(result + "\n\n" + outcome.Report, false, "check failed", CheckFailed: true);
     }
 
     /// <summary>

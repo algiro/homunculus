@@ -5,7 +5,7 @@ namespace Homunculus;
 
 /// <summary>
 /// Reads lines from the user: slash commands go to the command registry, anything else goes to the agent. It opens with the
-/// banner when given what to put in it.
+/// banner when given what to put in it, then the start-up note, if any.
 /// </summary>
 public sealed class Repl(
     Agent agent,

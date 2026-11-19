@@ -17,7 +17,12 @@ public sealed class CheckDetector(Func<string, bool> isOnPath, bool windows, str
     private static readonly string[] WindowsPythons = ["python", "python3"];
     private static readonly string[] OtherPythons = ["python3", "python"];
 
-    public static CheckDetector ForThisMachine() => new(Executables.IsOnPath, OperatingSystem.IsWindows(), Path.GetTempPath());
+    /// <summary>Suggests only programs the check can start: found on PATH outside the project, the way run_command finds them.</summary>
+    public static CheckDetector ForThisMachine(ProjectDirectory project)
+    {
+        var locator = new ProgramLocator(project);
+        return new(name => locator.Find(name) is not null, OperatingSystem.IsWindows(), Path.GetTempPath());
+    }
 
     /// <summary>The first match in the order .NET, Go, Rust, TypeScript, Python, Maven, Gradle; null when nothing is recognised.</summary>
     public DetectedCheck? Detect(string root)
@@ -90,8 +95,7 @@ public sealed class CheckDetector(Func<string, bool> isOnPath, bool windows, str
         if (!files.Any(file => file.StartsWith("build.gradle", StringComparison.Ordinal) || file.StartsWith("settings.gradle", StringComparison.Ordinal)))
             return null;
 
-        if (windows && files.Contains("gradlew.bat")) return new DetectedCheck("Gradle", @".\gradlew.bat -q classes");
-        if (!windows && files.Contains("gradlew")) return new DetectedCheck("Gradle", "./gradlew -q classes");
+        // Never the project's own gradlew wrapper: a file the repository controls is not run after every edit.
         return isOnPath("gradle") ? new DetectedCheck("Gradle", "gradle -q classes") : null;
     }
 

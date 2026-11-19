@@ -78,8 +78,7 @@ public class ToolRunnerTests
 
         await Run("plan", """{"steps":["[x] read","[ ] edit"]}""");
 
-        Assert.That(_app.Ui.Output, Has.Count.EqualTo(2));
-        Assert.That(_app.Ui.Output[1], Is.EqualTo("1. [x] read\n2. [ ] edit"));
+        Assert.That(_app.Ui.Output.Single(), Is.EqualTo("1. [x] read\n2. [ ] edit"));
     }
 
     [Test]
@@ -89,7 +88,7 @@ public class ToolRunnerTests
 
         await Run("plan", """{"steps":[]}""");
 
-        Assert.That(_app.Ui.Output, Has.Count.EqualTo(1));
+        Assert.That(_app.Ui.Output, Is.Empty);
     }
 
     [Test]
@@ -99,8 +98,8 @@ public class ToolRunnerTests
 
         await Run("plan", "{}");
 
-        Assert.That(_app.Ui.Output, Has.Count.EqualTo(2));
-        Assert.That(_app.Ui.Output[1], Does.StartWith("  <- Error:"));
+        Assert.That(_app.Ui.Output, Is.Empty);
+        Assert.That(_app.Ui.ToolResults.Single(), Has.Property("Failed").True.And.Property("Summary").StartsWith("Error:"));
     }
 
     [Test]
@@ -157,7 +156,7 @@ public class ToolRunnerTests
         Start("effect");
         _app.Ui.Answers('n');
 
-        var result = await Run("run_command", """{"command":"echo hi"}""");
+        var result = await Run("run_command", """{"program":"dotnet","args":["--version"]}""");
 
         Assert.That(result, Does.Contain("Do not retry it or work around it").And.Contain("tell the user"));
     }
@@ -215,7 +214,7 @@ public class ToolRunnerTests
 
         await Run("read_file", """{"path":"nope.txt"}""");
 
-        Assert.That(_app.Ui.Output[^1], Does.StartWith("  <- Error: File not found"));
+        Assert.That(_app.Ui.ToolResults[^1], Has.Property("Failed").True.And.Property("Summary").StartsWith("Error: File not found"));
     }
 
     [Test]
@@ -225,7 +224,8 @@ public class ToolRunnerTests
 
         await Run("fly", "{}");
 
-        Assert.That(_app.Ui.Output.Single(), Is.EqualTo("  <- Error: unknown tool 'fly'."));
+        Assert.That(_app.Ui.ToolCalls.Single(), Is.EqualTo("fly "));
+        Assert.That(_app.Ui.ToolResults.Single(), Is.EqualTo(new ToolOutcome(true, "unknown tool 'fly'", TimeSpan.Zero)));
     }
 
     [Test]

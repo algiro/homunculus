@@ -79,32 +79,26 @@ public class ExecutablesAndOutputTests
     }
 
     [Test]
-    public async Task ACommandsLongOutputKeepsItsSummaryAndExitCode()
-    {
-        var runner = new FakeCommandRunner
-        {
-            Outcome = new CommandOutcome(string.Join('\n', Enumerable.Range(1, 6000).Select(i => $"restore line {i}")) + "\nBuild FAILED: 3 errors\n", 1),
-        };
-        var tool = new RunCommandTool(runner);
-
-        var result = await tool.RunAsync(Json.Parse("""{"command":"dotnet build"}"""), CancellationToken.None);
-
-        Assert.That(result, Does.StartWith("restore line 1\n"));
-        Assert.That(result, Does.Contain("characters left out").And.Contain("Build FAILED: 3 errors").And.EndWith("[exit code 1]"));
-        Assert.That(result.Length, Is.LessThan(Limits.CommandOutputChars + 100));
-    }
-
-    [Test]
-    public async Task AShortOutputIsReturnedWhole()
-    {
-        var tool = new RunCommandTool(new FakeCommandRunner { Outcome = new CommandOutcome("hello\n", 0) });
-
-        var result = await tool.RunAsync(Json.Parse("""{"command":"echo hello"}"""), CancellationToken.None);
-
-        Assert.That(result, Is.EqualTo("hello\n\n[exit code 0]"));
-    }
-
-    [Test]
     public void ReadingAFileStillKeepsTheWholeFirstPart() =>
         Assert.That(Limits.CommandOutputChars, Is.LessThan(Limits.OutputChars), "commands are capped tighter than files");
+
+    [TestCase("dotnet build -v q", new[] { "dotnet", "build", "-v", "q" })]
+    [TestCase("dotnet build \"My App.sln\" --nologo", new[] { "dotnet", "build", "My App.sln", "--nologo" })]
+    [TestCase(@"python -x ""(\.venv|venv)"" .", new[] { "python", "-x", @"(\.venv|venv)", "." })]
+    [TestCase("git log | head", new[] { "git", "log", "|", "head" })]
+    [TestCase("  ", new string[0])]
+    public void SplitsACheckCommandLineWithoutAShell(string line, string[] words) =>
+        Assert.That(CommandLine.Split(line), Is.EqualTo(words));
+
+    [TestCase("./gradlew -q classes")]
+    [TestCase(@".\gradlew.bat -q classes")]
+    public void NeverRunsACheckProgramGivenAsAPath(string command)
+    {
+        using var project = new TempProject();
+        var runner = new CommandRunner(project.Location, TimeSpan.FromSeconds(5));
+
+        var error = Assert.ThrowsAsync<ToolException>(() => runner.RunAsync(command, CancellationToken.None));
+
+        Assert.That(error!.Message, Does.Contain("only programs on PATH"));
+    }
 }

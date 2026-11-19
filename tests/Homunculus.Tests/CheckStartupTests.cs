@@ -29,8 +29,8 @@ public class CheckStartupTests
     {
         var output = await Start(null, "go.mod");
 
-        Assert.That(output[0], Is.EqualTo("homunculus - type /help for commands."));
-        Assert.That(output[1], Does.StartWith("check: go build ./... (found for Go;").And.Contain("HOMUNCULUS_CHECK_COMMAND"));
+        Assert.That(_app.Ui.Banners, Has.Count.EqualTo(1));
+        Assert.That(output[0], Does.StartWith("check: go build ./... (found for Go;").And.Contain("HOMUNCULUS_CHECK_COMMAND"));
     }
 
     [Test]
@@ -38,7 +38,7 @@ public class CheckStartupTests
     {
         var output = await Start(null);
 
-        Assert.That(output, Is.EqualTo(new[] { "homunculus - type /help for commands." }));
+        Assert.That(output, Is.Empty);
     }
 
     [Test]
@@ -46,22 +46,22 @@ public class CheckStartupTests
     {
         var output = await Start("off", "go.mod");
 
-        Assert.That(output, Is.EqualTo(new[] { "homunculus - type /help for commands." }));
+        Assert.That(output, Is.Empty);
     }
 
     [Test]
     public async Task NamesAnExplicitCommandToo()
     {
-        var output = await Start("exit 0");
+        var output = await Start("dotnet --version");
 
-        Assert.That(output[1], Is.EqualTo("check: exit 0"));
+        Assert.That(output[0], Is.EqualTo("check: dotnet --version"));
     }
 
     [Test]
     public async Task RunsTheFoundCheckAfterAChange()
     {
-        // "exit 0" stands in for what was found: the point is that a found command is the one that runs.
-        await Start("exit 0");
+        // "dotnet --version" stands in for what was found: the point is that a found command is the one that runs.
+        await Start("dotnet --version");
         var runner = _app.Runner;
 
         var result = await runner.RunAsync(
