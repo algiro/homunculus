@@ -1,0 +1,10 @@
+# Install as /etc/sudoers.d/homunculus-sec (mode 0440, owner root) and check it with: visudo -cf /etc/sudoers.d/homunculus-sec
+#
+# The service runs as the unprivileged user "homunculus-sec" and may run exactly the three ufw commands it needs, nothing else.
+# The address is validated as an IP by the program before it is ever passed on.
+Cmnd_Alias HOMUNCULUS_SEC = \
+    /usr/sbin/ufw insert 1 deny from * comment homunculus-sec, \
+    /usr/sbin/ufw deny from * comment homunculus-sec, \
+    /usr/sbin/ufw delete deny from *
+
+homunculus-sec ALL=(root) NOPASSWD: HOMUNCULUS_SEC
