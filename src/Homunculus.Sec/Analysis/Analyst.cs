@@ -92,6 +92,32 @@ public sealed class Analyst(ILanguageModel model, IEventLog? log = null)
         return proposal;
     }
 
+    /// <summary>
+    /// Answers a follow-up question from the operator about an incident. The model gets no tools here, so whatever it says,
+    /// nothing is executed: acting on the incident takes the operator's explicit approval.
+    /// </summary>
+    public async Task<string> AnswerAsync(Proposal proposal, string question, CancellationToken cancellation)
+    {
+        var conversation = new Conversation(
+            SystemPrompt.Split("Rules the detector uses:")[0] +
+            "The operator, who is trusted, now asks you a question about this incident. Answer briefly and plainly. You cannot act; " +
+            "to block the address the operator must approve it.");
+        conversation.Add(Message.User(Describe(proposal.Finding) + $"\nYour earlier recommendation: {proposal.Action}, severity {proposal.Severity}. {proposal.Reason}"));
+        conversation.Add(Message.Assistant("Understood. What would you like to know?"));
+        conversation.Add(Message.User(Clean(question, 1000)));
+
+        try
+        {
+            var reply = await model.CompleteAsync(conversation, [], cancellation);
+            return string.IsNullOrWhiteSpace(reply.Message.Content) ? "The model gave no answer." : reply.Message.Content.Trim();
+        }
+        catch (ModelException e)
+        {
+            log?.Write("answer_failed", new { error = e.Message });
+            return "The model is not available right now.";
+        }
+    }
+
     internal static string Describe(Finding finding)
     {
         var text = new StringBuilder();
