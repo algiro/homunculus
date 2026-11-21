@@ -70,8 +70,11 @@ public static class Program
         var allowlist = new Allowlist(settings.NeverBlock);
         var guard = new ProposalGuard(allowlist, TimeSpan.FromHours(settings.MaxBlockHours));
 
-        IFirewall firewall = settings.DryRun ? new DryRunFirewall() : new UfwFirewall(new ProcessRunner());
-        var blocks = new BlockManager(firewall, settings.StatePath, log: log);
+        IFirewall firewall = settings.DryRun
+            ? new DryRunFirewall()
+            : settings.Firewall == "ufw" ? new UfwFirewall(new ProcessRunner()) : new IptablesFirewall(new ProcessRunner());
+        // Dry-run decisions go to a file of their own: they must never turn into real blocks when the service is switched to live.
+        var blocks = new BlockManager(firewall, settings.DryRun ? settings.StatePath + ".dryrun" : settings.StatePath, log: log);
 
         var model = new OpenAiModel(OpenAiModel.CreateClient(settings.ModelBaseUrl, settings.ModelApiKey), settings.ModelName, log);
         var analyst = new Analyst(model, log);
@@ -88,6 +91,6 @@ public static class Program
 
         return new SecMonitor(logs, DefaultDetectors.Create(), analyst, guard, book, telegram, settings.TelegramChatId, blocks, chat, log,
             report: Report,
-            startupMessage: "\U0001F7E2 <b>homunculus-sec started</b>" + (settings.DryRun ? " (dry run: nothing will be blocked). " : ". ") + "Send /help for the commands.");
+            startupMessage: "\U0001F7E2 <b>homunculus-sec started</b>" + (settings.DryRun ? " (dry run: nothing will be blocked). " : $" (live: blocking with {settings.Firewall}). ") + "Send /help for the commands.");
     }
 }

@@ -28,6 +28,68 @@ public class FirewallTests
     }
 
     [Test]
+    public async Task Iptables_RunsOnlyItsWrapperThroughSudo()
+    {
+        var runner = new FakeRunner();
+
+        await new IptablesFirewall(runner).BlockAsync("8.8.8.8", CancellationToken.None);
+        await new IptablesFirewall(runner).UnblockAsync("8.8.8.8", CancellationToken.None);
+
+        Assert.That(runner.Calls, Is.EqualTo(new[]
+        {
+            "sudo -n /usr/local/sbin/homunculus-sec-fw block 8.8.8.8",
+            "sudo -n /usr/local/sbin/homunculus-sec-fw unblock 8.8.8.8",
+        }));
+    }
+
+    [Test]
+    public void Iptables_RefusesAnythingThatIsNotAnIpAddress()
+    {
+        var runner = new FakeRunner();
+
+        Assert.ThrowsAsync<FirewallException>(() => new IptablesFirewall(runner).BlockAsync("8.8.8.8; reboot", CancellationToken.None));
+
+        Assert.That(runner.Calls, Is.Empty);
+    }
+
+    [Test]
+    public async Task Manager_RestoreAppliesTheRunningBlocksAgainAndSkipsExpiredAndProtectedOnes()
+    {
+        var clock = new FakeClock();
+        using (var first = new BlockManager(new DryRunFirewall(), _state, clock))
+        {
+            await first.BlockAsync("203.0.113.1", TimeSpan.FromHours(1), "expires", CancellationToken.None);
+            await first.BlockAsync("203.0.113.2", TimeSpan.FromHours(10), "running", CancellationToken.None);
+            await first.BlockAsync("203.0.113.3", null, "permanent", CancellationToken.None);
+            await first.BlockAsync("203.0.113.4", TimeSpan.FromHours(10), "protected since", CancellationToken.None);
+        }
+
+        clock.Advance(TimeSpan.FromHours(2));
+        var firewall = new DryRunFirewall();
+        using var second = new BlockManager(firewall, _state, clock);
+
+        var (applied, failed) = await second.RestoreAsync(CancellationToken.None, ip => ip == "203.0.113.4");
+
+        Assert.That(firewall.Actions, Is.EquivalentTo(new[] { "block 203.0.113.2", "block 203.0.113.3" }));
+        Assert.That((applied, failed), Is.EqualTo((2, 1)));
+    }
+
+    [Test]
+    public async Task Manager_RestoreCountsFailuresAndKeepsGoing()
+    {
+        using (var first = new BlockManager(new DryRunFirewall(), _state))
+        {
+            await first.BlockAsync("203.0.113.1", TimeSpan.FromHours(1), "x", CancellationToken.None);
+            await first.BlockAsync("203.0.113.2", TimeSpan.FromHours(1), "x", CancellationToken.None);
+        }
+
+        using var second = new BlockManager(new FailingFirewall(), _state);
+
+        Assert.That(await second.RestoreAsync(CancellationToken.None), Is.EqualTo((0, 2)));
+        Assert.That(second.Active, Has.Count.EqualTo(2));
+    }
+
+    [Test]
     public void Ufw_ReportsAFailure()
     {
         var runner = new FakeRunner((_, _) => new ProcessResult(1, "sudo: a password is required"));

@@ -1,5 +1,5 @@
 # Install as /etc/sudoers.d/homunculus-sec (mode 0440, owner root) and check it with: visudo -cf /etc/sudoers.d/homunculus-sec
 #
-# The service runs as the unprivileged user "homunculus-sec" and may run exactly one program as root: the wrapper, which
-# validates the address itself and then calls ufw. (The service cannot write to the wrapper.)
-homunculus-sec ALL=(root) NOPASSWD: /usr/local/sbin/homunculus-sec-ufw
+# The service runs as the unprivileged user "homunculus-sec" and may run exactly two programs as root: the wrappers, which
+# validate the address themselves and then call iptables or ufw. (The service cannot write to them.)
+homunculus-sec ALL=(root) NOPASSWD: /usr/local/sbin/homunculus-sec-fw, /usr/local/sbin/homunculus-sec-ufw

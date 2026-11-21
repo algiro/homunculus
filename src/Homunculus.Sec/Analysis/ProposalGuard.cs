@@ -9,6 +9,8 @@ public sealed class ProposalGuard(Allowlist allowlist, TimeSpan? maxBlock = null
 
     private readonly TimeSpan _max = maxBlock ?? TimeSpan.FromDays(7);
 
+    public bool IsProtected(string ip) => allowlist.IsProtected(ip);
+
     public Proposal Apply(Proposal proposal)
     {
         if (proposal.Action == ActionKind.BlockIp && allowlist.IsProtected(proposal.Ip))

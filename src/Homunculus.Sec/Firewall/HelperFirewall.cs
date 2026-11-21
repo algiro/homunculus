@@ -3,14 +3,12 @@ using System.Net;
 namespace Homunculus.Sec.Firewall;
 
 /// <summary>
-/// Blocks addresses through a small root-owned wrapper around <c>ufw</c> (<c>deploy/homunculus-sec-ufw</c>), started with
-/// <c>sudo -n</c> so it never prompts. The service's sudoers entry names only that wrapper, which validates the address again and
-/// is the only place that talks to <c>ufw</c>. The address is parsed and re-formatted here before it goes anywhere near a command.
+/// Blocks addresses through a small root-owned wrapper script, started with <c>sudo -n</c> so it never prompts. The service's
+/// sudoers entry names only that wrapper, which validates the address again and is the only place that talks to the firewall.
+/// The address is parsed and re-formatted here before it goes anywhere near a command.
 /// </summary>
-public sealed class UfwFirewall(IProcessRunner runner, string helperPath = UfwFirewall.DefaultHelper) : IFirewall
+public abstract class HelperFirewall(IProcessRunner runner, string helperPath) : IFirewall
 {
-    public const string DefaultHelper = "/usr/local/sbin/homunculus-sec-ufw";
-
     public Task BlockAsync(string ip, CancellationToken cancellation) => RunAsync("block", ip, cancellation);
 
     public Task UnblockAsync(string ip, CancellationToken cancellation) => RunAsync("unblock", ip, cancellation);
@@ -27,6 +25,22 @@ public sealed class UfwFirewall(IProcessRunner runner, string helperPath = UfwFi
 
     private static string Canonical(string ip) =>
         IPAddress.TryParse(ip, out var address) ? address.ToString() : throw new FirewallException($"'{ip}' is not an IP address.");
+}
+
+/// <summary>
+/// Blocks with iptables (<c>deploy/homunculus-sec-fw</c>): a DROP rule for the address in INPUT, for the host itself, and in
+/// Docker's DOCKER-USER chain, for published container ports, which <c>ufw</c> rules do not reach. It changes no policy and needs
+/// no <c>ufw</c>.
+/// </summary>
+public sealed class IptablesFirewall(IProcessRunner runner, string helperPath = IptablesFirewall.DefaultHelper) : HelperFirewall(runner, helperPath)
+{
+    public const string DefaultHelper = "/usr/local/sbin/homunculus-sec-fw";
+}
+
+/// <summary>Blocks with <c>ufw deny from</c> (<c>deploy/homunculus-sec-ufw</c>). Needs ufw to be enabled, and does not cover Docker-published ports.</summary>
+public sealed class UfwFirewall(IProcessRunner runner, string helperPath = UfwFirewall.DefaultHelper) : HelperFirewall(runner, helperPath)
+{
+    public const string DefaultHelper = "/usr/local/sbin/homunculus-sec-ufw";
 }
 
 /// <summary>Does nothing but record what it would have done. For trying the service out before giving it any rights.</summary>

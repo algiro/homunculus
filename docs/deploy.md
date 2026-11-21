@@ -21,8 +21,8 @@ Findings that shaped the setup:
 - **nginx runs in Docker**, so there is no `/var/log/nginx` on the host. The container's logs are copied to a file by a small
   service (step 3) so that the watcher does not need Docker access, which is root-equivalent.
 - **The user cannot read `/var/log/auth.log`** (group `adm`). The service user is added to `adm`.
-- **Docker-published ports bypass ufw**, and ufw is disabled anyway, so a `ufw deny` would not stop web traffic yet. That is why
-  the deployment stays in **dry-run** (see [Going live](#going-live)).
+- **Docker-published ports bypass ufw**, and ufw is disabled anyway, so a `ufw deny` would not stop web traffic. That is why this
+  host uses the **iptables** wrapper, which also drops traffic in Docker's `DOCKER-USER` chain (see [Going live](#going-live)).
 - **Memory is the scarce resource**: about 4.7 GB available while the containers run. The model must be small and capped.
 
 ## Overview
@@ -46,9 +46,9 @@ Copy it and the deployment files to the server (from WSL; `he-it-tudes` is the S
 
 ```
 ssh he-it-tudes 'mkdir -p ~/hs'
-scp publish/linux-x64/homunculus-sec deploy/setup-root.sh deploy/homunculus-sec-ufw he-it-tudes:~/hs/
+scp publish/linux-x64/homunculus-sec deploy/setup-root.sh deploy/homunculus-sec-fw deploy/homunculus-sec-ufw he-it-tudes:~/hs/
 ssh he-it-tudes 'chmod +x ~/hs/setup-root.sh ~/hs/homunculus-sec; cd ~/hs && sha256sum *'
-sha256sum publish/linux-x64/homunculus-sec deploy/setup-root.sh deploy/homunculus-sec-ufw   # compare with the server's
+sha256sum publish/linux-x64/homunculus-sec deploy/setup-root.sh deploy/homunculus-sec-fw deploy/homunculus-sec-ufw   # compare with the server's
 ```
 
 ## 2. The Telegram bot
@@ -76,14 +76,15 @@ cd ~/hs
 sudo ./setup-root.sh --binary ./homunculus-sec --nginx-container ninvoices-nginx-prod --chat-id <your chat id>
 ```
 
-It is idempotent, never enables ufw, never touches Docker or iptables rules, and never handles the bot token. It:
+It is idempotent, never enables ufw, adds no firewall rule and changes no policy (rules appear only when a block is approved, in
+their own `HOMUNCULUS-SEC` chain), and never handles the bot token. It:
 
 1. creates the system user `homunculus-sec` and adds it to `adm`;
 2. installs the program to `/opt/homunculus-sec`;
 3. writes `/etc/homunculus-sec/config.json` (dry-run on) and a placeholder `/etc/homunculus-sec/env`, only if they do not exist;
-4. installs the wrapper `/usr/local/sbin/homunculus-sec-ufw` and a sudoers rule that allows the service user to run **only that
-   wrapper** (the rule is checked with `visudo` before it is installed). The wrapper accepts only a public IP in canonical form
-   and then calls `ufw`;
+4. installs the wrappers `/usr/local/sbin/homunculus-sec-fw` (iptables, the default) and `/usr/local/sbin/homunculus-sec-ufw`, and a
+   sudoers rule that allows the service user to run **only those two** (checked with `visudo` before it is installed). A wrapper
+   accepts only a public IP in canonical form that is not one of the server's own addresses, and then calls `iptables` or `ufw`;
 5. installs the `homunculus-sec` service and, because nginx is in Docker, `homunculus-sec-nginx-logs`, which runs
    `docker logs --follow --tail 0 <container>` into `/var/log/homunculus-sec/nginx.log` (group `adm`, mode 0640), with logrotate;
 6. enables both, and starts the watcher only when the token and chat id are set.
@@ -179,8 +180,8 @@ it is unloaded and the memory returns.
 | model server | `ollama list`, `curl -s http://127.0.0.1:11434/api/version` | model listed, version JSON |
 | model quality | `python3 deploy/bench-model.py homunculus-sec-analyst 1` | `SCORE 3/3` |
 | log copy | `sudo tail -n 3 /var/log/homunculus-sec/nginx.log` | nginx lines with real client IPs |
-| sudo rule | `sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-ufw block 10.0.0.1` | refused (private address) |
-| sudo rule is narrow | `sudo -u homunculus-sec sudo -n ufw status` | refused |
+| sudo rule | `sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-fw block 10.0.0.1` | refused (private address) |
+| sudo rule is narrow | `sudo -u homunculus-sec sudo -n iptables -S` | refused |
 | bot | send `/help` in Telegram | the command list |
 | end to end (dry run) | from another machine: `for i in 1 2 3; do curl -s https://your-site/.env; done` | an alert with Block / Ignore buttons within about a minute |
 
@@ -219,17 +220,43 @@ An address in `neverBlock` (or a private one) never produces an alert: the propo
 
 ## Going live
 
-The deployment ships with `"dryRun": true`: alerts and buttons work, but pressing **Block** only records the decision. Before
-turning it off, settle the firewall question for this host:
+The deployment ships with `"dryRun": true`: alerts and buttons work, but pressing **Block** only records the decision. On this host
+blocking uses **iptables** (`"firewall": "iptables"`, the default), because ufw is disabled here and Docker's published ports
+(80/443 to the nginx container) bypass ufw even when it is on. An approved block adds one `DROP` rule for the address in a chain of
+its own, `HOMUNCULUS-SEC`, which is hooked first in `INPUT` (SSH and everything on the host) and in `DOCKER-USER` (the containers).
+It also cuts connections that are already open. No policy is changed and ufw is not touched. Look at the rules with
+`sudo iptables -S HOMUNCULUS-SEC`. The service re-applies its saved blocks when it starts, because plain iptables rules do not
+survive a reboot.
 
-- ufw is **disabled**: rules are added but nothing enforces them. Enabling ufw on a production machine needs `ufw allow OpenSSH`
-  first (and anything else that must stay reachable), or you lock yourself out.
-- **Docker-published ports (80/443) bypass ufw.** A `ufw deny from <ip>` protects SSH and non-Docker services but does not stop
-  web traffic to the containers. Blocking web attackers needs rules in Docker's `DOCKER-USER` iptables chain, which the program
-  does not manage yet.
+Checklist before turning dry run off:
 
-Until that is decided, dry-run still gives you the detection, the analysis and the alerts, which is the part to evaluate first.
-Add your own addresses (and any CDN ranges) to `neverBlock` before switching `dryRun` off.
+1. **Put your own addresses in `neverBlock`** (home, office, the VPN, monitoring services, and any CDN ranges) in
+   `/etc/homunculus-sec/config.json`. This is what stops a mistaken alert from locking you out of SSH.
+2. **Re-run `setup-root.sh`** from the new files to install the iptables wrapper and the two-wrapper sudoers rule (it keeps your
+   config and env files).
+3. **Check the wrapper by hand** with an address you control (a phone on mobile data, for example), and see the rule appear and
+   disappear:
+   ```
+   sudo /usr/local/sbin/homunculus-sec-fw block <that public address>
+   sudo iptables -S HOMUNCULUS-SEC          # shows: -A HOMUNCULUS-SEC -s <address>/32 -j DROP
+   sudo iptables -S DOCKER-USER             # shows the hook: -A DOCKER-USER -j HOMUNCULUS-SEC (first)
+   sudo /usr/local/sbin/homunculus-sec-fw unblock <that public address>
+   ```
+   and confirm the service user may run it, and only it:
+   `sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-fw block 10.0.0.1` must answer "refused", and
+   `sudo -u homunculus-sec sudo -n iptables -S` must be refused by sudo.
+4. **Dry-run decisions are kept apart.** In dry run the service uses its own state file (`blocks.json.dryrun`), so nothing you
+   pressed during testing can become a real block. Delete a stale `blocks.json` from a build older than this one before going
+   live (`sudo rm /var/lib/homunculus-sec/blocks.json`), because that file held dry-run decisions. On start the service also
+   skips any saved block whose address is on the never-block list.
+5. **Switch it on** by setting `HOMUNCULUS_SEC_DRY_RUN=false` in `/etc/homunculus-sec/env` (the environment overrides the config
+   file), then `sudo systemctl restart homunculus-sec`. The Telegram greeting then says "live: blocking with iptables".
+6. **Test with your phone** (not your usual address): provoke an alert, press **Block**, and check that the phone can no longer
+   open the site or SSH in. `/unblock <ip>` brings it back, and so does waiting for the expiry.
+
+To go back to a safe state at any time: `HOMUNCULUS_SEC_DRY_RUN=true`, restart; and to remove every block at once,
+`sudo iptables -F HOMUNCULUS-SEC; sudo ip6tables -F HOMUNCULUS-SEC` (the service's own list is then out of date until the blocks
+expire).
 
 ## Known limits
 

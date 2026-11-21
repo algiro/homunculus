@@ -16,6 +16,7 @@ public class RenderedConfigTests
             .Replace("$ERROR_LOG", "/var/log/homunculus-sec/nginx.log", StringComparison.Ordinal)
             .Replace("$CHAT_ID", "123456", StringComparison.Ordinal)
             .Replace("$MODEL", "qwen2.5:3b", StringComparison.Ordinal)
+            .Replace("$FIREWALL", "iptables", StringComparison.Ordinal)
             .Replace("$STATE_DIR", "/var/lib/homunculus-sec", StringComparison.Ordinal);
         Assert.That(template, Does.Not.Contain("$"));
 
@@ -26,6 +27,7 @@ public class RenderedConfigTests
             var settings = SecSettings.Load(file, _ => null);
 
             Assert.That(settings.DryRun, Is.True);
+            Assert.That(settings.Firewall, Is.EqualTo("iptables"));
             Assert.That(settings.TelegramChatId, Is.EqualTo(123456));
             Assert.That(settings.NginxAccessLog, Is.EqualTo("/var/log/homunculus-sec/nginx.log"));
             Assert.That(settings.StatePath, Is.EqualTo("/var/lib/homunculus-sec/blocks.json"));

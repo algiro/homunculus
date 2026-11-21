@@ -92,6 +92,50 @@ public sealed class BlockManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Applies the blocks that are still running to the firewall again. Needed because some firewalls forget their rules when the
+    /// machine restarts (plain iptables does), and harmless when they do not (blocking is idempotent). Blocks whose time is up are
+    /// left to <see cref="ExpireDueAsync"/>. Returns how many were applied and how many the firewall refused.
+    /// </summary>
+    public async Task<(int Applied, int Failed)> RestoreAsync(CancellationToken cancellation, Func<string, bool>? isProtected = null)
+    {
+        var now = _clock.GetUtcNow();
+        var running = Active.Where(b => b.ExpiresAt is null || b.ExpiresAt > now).Select(b => b.Ip).ToList();
+        int applied = 0, failed = 0;
+
+        await _gate.WaitAsync(cancellation);
+        try
+        {
+            foreach (var ip in running)
+            {
+                if (isProtected?.Invoke(ip) == true)
+                {
+                    // Such an address should never have been blocked (the never-block list may have grown since): do not apply it.
+                    failed++;
+                    _log.Write("restore_skipped_protected", new { ip });
+                    continue;
+                }
+
+                try
+                {
+                    await _firewall.BlockAsync(ip, cancellation);
+                    applied++;
+                }
+                catch (FirewallException e)
+                {
+                    failed++;
+                    _log.Write("restore_failed", new { ip, error = e.Message });
+                }
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        return (applied, failed);
+    }
+
     /// <summary>Removes every block whose time is up. Returns the addresses that were unblocked.</summary>
     public async Task<IReadOnlyList<string>> ExpireDueAsync(CancellationToken cancellation)
     {

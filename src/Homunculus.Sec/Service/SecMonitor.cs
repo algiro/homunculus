@@ -38,6 +38,8 @@ public sealed class SecMonitor(
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         var watcher = new LogWatcher(logs, detectors, finding => OnFindingSafelyAsync(finding, stop.Token));
 
+        await RestoreBlocksAsync(stop.Token);
+
         // The greeting runs alongside the loops: a slow or unreachable Telegram must not hold the watcher back.
         var announcement = AnnounceAsync(stop.Token);
         Task[] loops = [watcher.RunAsync(stop.Token), PollAsync(stop.Token), SweepAsync(stop.Token)];
@@ -95,6 +97,13 @@ public sealed class SecMonitor(
             log?.Write("finding_failed", new { finding.Rule, finding.Ip, error = e.Message });
             report?.Invoke($"Could not handle the finding for {finding.Ip} ({finding.Rule}): {e.GetType().Name}: {e.Message}");
         }
+    }
+
+    /// <summary>Puts the saved blocks back into the firewall (it may have forgotten them in a reboot) and says so if it had to.</summary>
+    private async Task RestoreBlocksAsync(CancellationToken cancellation)
+    {
+        var (applied, failed) = await blocks.RestoreAsync(cancellation, guard.IsProtected);
+        if (applied + failed > 0) report?.Invoke($"Re-applied {applied} saved block(s) to the firewall{(failed > 0 ? $"; {failed} could not be applied" : "")}.");
     }
 
     /// <summary>Says hello in the chat. It is also the first proof that the token and the chat id are right.</summary>
