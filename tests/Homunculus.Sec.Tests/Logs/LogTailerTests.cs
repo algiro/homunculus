@@ -98,7 +98,7 @@ public class LogTailerTests
         File.WriteAllText(_file, "");
         var found = new TaskCompletionSource<Finding>();
         var watcher = new LogWatcher(
-            [new WatchedLog(new LogTailer(_file, TimeSpan.FromMilliseconds(20)), new NginxAccessParser())],
+            [new WatchedLog(new LogTailer(_file, TimeSpan.FromMilliseconds(20), fromStart: true), new NginxAccessParser())],
             DefaultDetectors.Create(new DetectorOptions { ProbeCount = 2 }),
             finding =>
             {

@@ -18,23 +18,13 @@ public class FirewallTests
     public void TearDown() => Directory.Delete(_dir, recursive: true);
 
     [Test]
-    public async Task Ufw_InsertsADenyRuleThroughSudoWithoutAShell()
+    public async Task Ufw_RunsOnlyTheWrapperThroughSudoWithoutAShell()
     {
         var runner = new FakeRunner();
 
         await new UfwFirewall(runner).BlockAsync("203.0.113.5", CancellationToken.None);
 
-        Assert.That(runner.Calls.Single(), Is.EqualTo("sudo -n ufw insert 1 deny from 203.0.113.5 comment homunculus-sec"));
-    }
-
-    [Test]
-    public async Task Ufw_FallsBackToAPlainDenyWhenThereIsNoPositionOne()
-    {
-        var runner = new FakeRunner((_, call) => call == 1 ? new ProcessResult(1, "ERROR: Invalid position '1'") : new ProcessResult(0, ""));
-
-        await new UfwFirewall(runner).BlockAsync("203.0.113.5", CancellationToken.None);
-
-        Assert.That(runner.Calls[1], Is.EqualTo("sudo -n ufw deny from 203.0.113.5 comment homunculus-sec"));
+        Assert.That(runner.Calls.Single(), Is.EqualTo("sudo -n /usr/local/sbin/homunculus-sec-ufw block 203.0.113.5"));
     }
 
     [Test]
@@ -69,7 +59,7 @@ public class FirewallTests
 
         await new UfwFirewall(runner).UnblockAsync("203.0.113.5", CancellationToken.None);
 
-        Assert.That(runner.Calls.Single(), Is.EqualTo("sudo -n ufw delete deny from 203.0.113.5"));
+        Assert.That(runner.Calls.Single(), Is.EqualTo("sudo -n /usr/local/sbin/homunculus-sec-ufw unblock 203.0.113.5"));
     }
 
     [Test]

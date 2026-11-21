@@ -5,3 +5,4 @@ obj/
 launchSettings.json
 
 *.jsonl
+publish/

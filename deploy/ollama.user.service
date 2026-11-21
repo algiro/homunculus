@@ -1,0 +1,25 @@
+# Install as ~/.config/systemd/user/ollama.service, then:
+#   systemctl --user daemon-reload && systemctl --user enable --now ollama
+#   loginctl enable-linger "$USER"        # keeps it running after you log out
+[Unit]
+Description=Ollama (local model server for homunculus-sec)
+
+[Service]
+ExecStart=%h/.local/ollama/bin/ollama serve
+Environment=OLLAMA_HOST=127.0.0.1:11434
+Environment=OLLAMA_MODELS=%h/.ollama/models
+Environment=OLLAMA_KEEP_ALIVE=2m
+Environment=OLLAMA_MAX_LOADED_MODELS=1
+Environment=OLLAMA_NUM_PARALLEL=1
+Environment=OLLAMA_CONTEXT_LENGTH=4096
+Environment=OLLAMA_NOHISTORY=1
+# This host also runs production containers: cap what the model server can take.
+MemoryMax=3600M
+CPUQuota=250%
+CPUWeight=20
+Nice=10
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

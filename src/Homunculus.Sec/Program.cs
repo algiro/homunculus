@@ -48,10 +48,22 @@ public static class Program
         var monitor = Build(settings, eventLog ?? (IEventLog)NullEventLog.Instance);
 
         Console.WriteLine($"homunculus-sec running{(settings.DryRun ? " (dry run: no firewall changes)" : "")}. Stop with ctrl-c.");
-        await monitor.RunAsync(cancellation.Token);
+        try
+        {
+            await monitor.RunAsync(cancellation.Token);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"homunculus-sec stopped by an error: {e}");
+            return 1;
+        }
+
         Console.WriteLine("homunculus-sec stopped.");
         return 0;
     }
+
+    /// <summary>What the service tells the operator on stderr, which systemd puts in the journal.</summary>
+    private static void Report(string message) => Console.Error.WriteLine(message);
 
     private static SecMonitor Build(SecSettings settings, IEventLog log)
     {
@@ -69,11 +81,13 @@ public static class Program
 
         WatchedLog[] logs =
         [
-            new(new LogTailer(settings.NginxAccessLog), new NginxAccessParser()),
-            new(new LogTailer(settings.NginxErrorLog), new NginxErrorParser()),
-            new(new LogTailer(settings.AuthLog), new AuthLogParser()),
+            new(new LogTailer(settings.NginxAccessLog, report: Report), new NginxAccessParser()),
+            new(new LogTailer(settings.NginxErrorLog, report: Report), new NginxErrorParser()),
+            new(new LogTailer(settings.AuthLog, report: Report), new AuthLogParser()),
         ];
 
-        return new SecMonitor(logs, DefaultDetectors.Create(), analyst, guard, book, telegram, settings.TelegramChatId, blocks, chat, log);
+        return new SecMonitor(logs, DefaultDetectors.Create(), analyst, guard, book, telegram, settings.TelegramChatId, blocks, chat, log,
+            report: Report,
+            startupMessage: "\U0001F7E2 <b>homunculus-sec started</b>" + (settings.DryRun ? " (dry run: nothing will be blocked). " : ". ") + "Send /help for the commands.");
     }
 }

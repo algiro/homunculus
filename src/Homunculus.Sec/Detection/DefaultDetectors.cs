@@ -25,7 +25,7 @@ public static partial class DefaultDetectors
             new WindowDetector(NotFoundBurst, e => e is { Kind: EntryKind.Request, Status: 404 }, o.NotFoundCount, o.NotFoundWindow, o.Cooldown),
             new WindowDetector(AuthDeniedBurst, e => e is { Kind: EntryKind.Request, Status: 401 or 403 }, o.AuthDeniedCount, o.AuthDeniedWindow, o.Cooldown),
             new WindowDetector(ScannerProbe, e => e is { Kind: EntryKind.Request, Path: { } path } && ProbePath().IsMatch(path), o.ProbeCount, o.ProbeWindow, o.Cooldown),
-            new WindowDetector(SshBruteForce, e => e.Kind == EntryKind.FailedLogin, o.SshFailureCount, o.SshFailureWindow, o.Cooldown),
+            new WindowDetector(SshBruteForce, e => e.Kind is EntryKind.FailedLogin or EntryKind.PreauthDrop, o.SshFailureCount, o.SshFailureWindow, o.Cooldown),
             new WindowDetector(RateLimited, e => e.Kind == EntryKind.RateLimited, o.RateLimitedCount, o.RateLimitedWindow, o.Cooldown),
         ];
     }

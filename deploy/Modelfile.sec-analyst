@@ -1,0 +1,8 @@
+# ollama create homunculus-sec-analyst -f Modelfile.sec-analyst
+FROM qwen3:4b-instruct-2507-q4_K_M
+# Low temperature: the same evidence should give the same verdict.
+PARAMETER temperature 0.2
+# The analyst's prompt is about 1.3k tokens including the log lines and the answer is about 150; 2k is enough and saves memory.
+PARAMETER num_ctx 2048
+# Matches the CPUQuota of the service (a little over 2 cores): more threads than cores only waste time on throttling.
+PARAMETER num_thread 3

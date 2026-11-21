@@ -3,3 +3,6 @@
 *.csproj text
 *.slnx text
 *.md text
+*.sh text eol=lf
+*.service text eol=lf
+deploy/*.sudoers text eol=lf

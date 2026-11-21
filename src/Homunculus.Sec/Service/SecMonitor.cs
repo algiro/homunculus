@@ -1,15 +1,17 @@
 using Homunculus.Logging;
 using Homunculus.Sec.Analysis;
 using Homunculus.Sec.Detection;
-using Homunculus.Sec.Firewall;
 using Homunculus.Sec.Logs;
 using Homunculus.Sec.Telegram;
+using Homunculus.Sec.Firewall;
 
 namespace Homunculus.Sec.Service;
 
 /// <summary>
 /// The service's main loop. It runs three things side by side: the log watcher (finding to analysis to alert), the Telegram
-/// poller (the operator's answers), and the sweep that removes blocks whose time is up.
+/// poller (the operator's answers), and the sweep that removes blocks whose time is up. If any of the three dies the whole
+/// service stops with the error, so the supervisor restarts it and the failure is visible, instead of one half running on silently.
+/// A single bad update or finding is reported and skipped; it never stops a loop.
 /// </summary>
 public sealed class SecMonitor(
     IReadOnlyList<WatchedLog> logs,
@@ -22,16 +24,39 @@ public sealed class SecMonitor(
     BlockManager blocks,
     ChatHandler chat,
     IEventLog? log = null,
-    TimeSpan? sweepEvery = null)
+    TimeSpan? sweepEvery = null,
+    Action<string>? report = null,
+    string? startupMessage = null,
+    TimeSpan? retryDelay = null)
 {
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
-
+    private readonly TimeSpan _retryDelay = retryDelay ?? TimeSpan.FromSeconds(5);
     private readonly TimeSpan _sweepEvery = sweepEvery ?? TimeSpan.FromMinutes(1);
 
-    public Task RunAsync(CancellationToken cancellation)
+    /// <summary>Runs until cancelled. Throws the error of whichever loop failed first.</summary>
+    public async Task RunAsync(CancellationToken cancellation)
     {
-        var watcher = new LogWatcher(logs, detectors, finding => OnFindingAsync(finding, cancellation));
-        return Task.WhenAll(watcher.RunAsync(cancellation), PollAsync(cancellation), SweepAsync(cancellation));
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        var watcher = new LogWatcher(logs, detectors, finding => OnFindingSafelyAsync(finding, stop.Token));
+
+        // The greeting runs alongside the loops: a slow or unreachable Telegram must not hold the watcher back.
+        var announcement = AnnounceAsync(stop.Token);
+        Task[] loops = [watcher.RunAsync(stop.Token), PollAsync(stop.Token), SweepAsync(stop.Token)];
+
+        var first = await Task.WhenAny(loops);
+        await stop.CancelAsync();
+        try
+        {
+            await Task.WhenAll(loops);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            // Normal shutdown.
+        }
+
+        await announcement;
+        await first; // rethrows the failure that ended the service, if there was one
+        if (!cancellation.IsCancellationRequested)
+            throw new InvalidOperationException("A service loop ended without being asked to stop.");
     }
 
     /// <summary>Turns one finding into an alert: skips addresses already handled, asks the analyst, and sends the proposal.</summary>
@@ -55,12 +80,46 @@ public sealed class SecMonitor(
         catch (TelegramException e)
         {
             log?.Write("alert_failed", new { incident.Id, error = e.Message });
+            report?.Invoke($"Could not send the alert for {finding.Ip}: {e.Message}");
+        }
+    }
+
+    private async Task OnFindingSafelyAsync(Finding finding, CancellationToken cancellation)
+    {
+        try
+        {
+            await OnFindingAsync(finding, cancellation);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            log?.Write("finding_failed", new { finding.Rule, finding.Ip, error = e.Message });
+            report?.Invoke($"Could not handle the finding for {finding.Ip} ({finding.Rule}): {e.GetType().Name}: {e.Message}");
+        }
+    }
+
+    /// <summary>Says hello in the chat. It is also the first proof that the token and the chat id are right.</summary>
+    private async Task AnnounceAsync(CancellationToken cancellation)
+    {
+        if (startupMessage is null) return;
+        try
+        {
+            await telegram.SendMessageAsync(chatId, startupMessage, null, cancellation);
+            report?.Invoke("Startup message sent to Telegram.");
+        }
+        catch (TelegramException e)
+        {
+            report?.Invoke($"Could not send the startup message to Telegram (is the chat id right, and did you press Start in the bot?): {e.Message}");
+        }
+        catch (OperationCanceledException)
+        {
+            // Shut down before the greeting went out.
         }
     }
 
     private async Task PollAsync(CancellationToken cancellation)
     {
         long offset = 0;
+        string? lastFailure = null;
         while (!cancellation.IsCancellationRequested)
         {
             try
@@ -68,25 +127,36 @@ public sealed class SecMonitor(
                 foreach (var update in await telegram.GetUpdatesAsync(offset, 30, cancellation))
                 {
                     offset = update.Id + 1;
-                    try
-                    {
-                        await chat.HandleAsync(update, cancellation);
-                    }
-                    catch (Exception e) when (e is TelegramException or FirewallException)
-                    {
-                        log?.Write("update_failed", new { update.Id, error = e.Message });
-                    }
+                    await HandleSafelyAsync(update, cancellation);
                 }
+
+                if (lastFailure is not null) report?.Invoke("Telegram polling recovered.");
+                lastFailure = null;
             }
             catch (TelegramException e)
             {
                 log?.Write("poll_failed", new { error = e.Message });
-                if (!await Delay(RetryDelay, cancellation)) return;
+                if (e.Message != lastFailure) report?.Invoke($"Telegram polling failed, retrying: {e.Message}");
+                lastFailure = e.Message;
+                if (!await Delay(_retryDelay, cancellation)) return;
             }
             catch (OperationCanceledException)
             {
                 return;
             }
+        }
+    }
+
+    private async Task HandleSafelyAsync(Update update, CancellationToken cancellation)
+    {
+        try
+        {
+            await chat.HandleAsync(update, cancellation);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            log?.Write("update_failed", new { update.Id, error = e.Message });
+            report?.Invoke($"Could not handle Telegram update {update.Id}: {e.GetType().Name}: {e.Message}");
         }
     }
 

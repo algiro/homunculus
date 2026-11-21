@@ -1,0 +1,53 @@
+#!/bin/bash
+# homunculus-sec-ufw: the only thing the homunculus-sec service may run as root (through sudo).
+#
+#   homunculus-sec-ufw block   <ip>   deny all traffic from <ip> (rule goes first, tagged "homunculus-sec")
+#   homunculus-sec-ufw unblock <ip>   remove that rule
+#
+# Install as /usr/local/sbin/homunculus-sec-ufw, owner root, mode 0755. The service user must not be able to write to it.
+# It checks the address itself, so a bug or compromise in the service cannot turn this into a general ufw (root) shell.
+
+set -euo pipefail
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+[ "$#" -eq 2 ] || { echo "usage: $0 block|unblock <ip>" >&2; exit 64; }
+action="$1"
+ip="$2"
+
+# Only a public, canonically written address. Private, loopback, link-local, multicast and reserved addresses are refused
+# here too, so even a bad request cannot lock the administrator or the machine itself out.
+python3 - "$ip" <<'PY' || { echo "refused: '$ip' is not a public IP address in canonical form" >&2; exit 65; }
+import ipaddress, sys
+text = sys.argv[1]
+try:
+    address = ipaddress.ip_address(text)
+except ValueError:
+    sys.exit(1)
+if str(address) != text:
+    sys.exit(1)
+if address.is_private or address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified or address.is_reserved:
+    sys.exit(1)
+PY
+
+case "$action" in
+    block)
+        # Position 1 so the deny comes before any broad allow. An empty rule set has no position 1: then a plain deny.
+        if ! output="$(ufw insert 1 deny from "$ip" comment homunculus-sec 2>&1)"; then
+            if grep -qi 'invalid position' <<<"$output"; then
+                ufw deny from "$ip" comment homunculus-sec
+            else
+                echo "$output" >&2
+                exit 1
+            fi
+        else
+            echo "$output"
+        fi
+        ;;
+    unblock)
+        ufw delete deny from "$ip"
+        ;;
+    *)
+        echo "usage: $0 block|unblock <ip>" >&2
+        exit 64
+        ;;
+esac

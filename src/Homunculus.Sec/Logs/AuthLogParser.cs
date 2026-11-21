@@ -22,6 +22,9 @@ public sealed partial class AuthLogParser(TimeProvider? clock = null) : ILogPars
     [GeneratedRegex(@"^Accepted \S+ for (?<user>\S+) from (?<ip>\S+) port")]
     private static partial Regex Accepted();
 
+    [GeneratedRegex(@"^(?:Connection closed by|Disconnected from|Connection reset by) (?:invalid|authenticating) user (?<user>.*?) (?<ip>\S+) port \d+ \[preauth\]$")]
+    private static partial Regex Dropped();
+
     public LogEntry? Parse(string line)
     {
         var match = Line().Match(line);
@@ -30,7 +33,7 @@ public sealed partial class AuthLogParser(TimeProvider? clock = null) : ILogPars
         if (time is null) return null;
 
         var message = match.Groups["message"].Value;
-        foreach (var (regex, kind) in new[] { (Failed(), EntryKind.FailedLogin), (Invalid(), EntryKind.InvalidUser), (Accepted(), EntryKind.LoginSuccess) })
+        foreach (var (regex, kind) in new[] { (Failed(), EntryKind.FailedLogin), (Invalid(), EntryKind.InvalidUser), (Accepted(), EntryKind.LoginSuccess), (Dropped(), EntryKind.PreauthDrop) })
         {
             var found = regex.Match(message);
             if (found.Success)

@@ -57,7 +57,7 @@ public sealed class Analyst(ILanguageModel model, IEventLog? log = null)
         - not_found_burst: many 404s in a minute (directory or file scanning).
         - auth_denied_burst: many 401/403 responses (credential stuffing or probing protected areas).
         - scanner_probe: requests for paths such as /.env, wp-login.php, phpmyadmin (automated vulnerability scanning).
-        - ssh_brute_force: repeated failed SSH logins (password guessing).
+        - ssh_brute_force: repeated failed SSH logins, or SSH connections dropped before logging in (password guessing; on a server that only accepts keys, every guess ends as such a dropped connection).
         - rate_limited: nginx rejected the IP's requests for exceeding its rate limit.
 
         Recommend block_ip when the behaviour is clearly hostile or abusive. Recommend ignore when it looks benign: a known
