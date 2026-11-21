@@ -1,5 +1,4 @@
-using System.Net.Http.Json;
-using System.Text.Json;
+using System.Text;
 using System.Text.Json.Nodes;
 
 namespace Homunculus.Sec.Telegram;
@@ -10,7 +9,16 @@ namespace Homunculus.Sec.Telegram;
 /// </summary>
 public sealed class TelegramApi(HttpClient http, string token) : ITelegramApi
 {
-    public static HttpClient CreateClient() => new() { BaseAddress = new Uri("https://api.telegram.org/"), Timeout = TimeSpan.FromSeconds(90) };
+    /// <summary>How long an ordinary call may take. A long poll holds the connection for its 30 s, so it gets more.</summary>
+    private static readonly TimeSpan CallTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan PollTimeout = TimeSpan.FromSeconds(45);
+
+    /// <summary>Connects IPv4 first with a short per-address deadline (see <see cref="TelegramConnect"/>); each call has its own deadline.</summary>
+    public static HttpClient CreateClient() => new(new SocketsHttpHandler { ConnectCallback = TelegramConnect.ConnectAsync, PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+    {
+        BaseAddress = new Uri("https://api.telegram.org/"),
+        Timeout = Timeout.InfiniteTimeSpan,
+    };
 
     public async Task<IReadOnlyList<Update>> GetUpdatesAsync(long offset, int timeoutSeconds, CancellationToken cancellation)
     {
@@ -93,21 +101,31 @@ public sealed class TelegramApi(HttpClient http, string token) : ITelegramApi
     {
         try
         {
-            using var response = await http.PostAsJsonAsync($"bot{token}/{method}", body, cancellation);
-            var text = await response.Content.ReadAsStringAsync(cancellation);
+            // The leading slash matters: without it "bot123456:AAH.../method" reads as an absolute URI whose scheme is "bot123456".
+            // A string body has a known length, so it is sent with Content-Length. PostAsJsonAsync streams it chunked, and the
+            // Bot API then never answers a request with a valid token.
+            using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+            deadline.CancelAfter(method == "getUpdates" ? PollTimeout : CallTimeout);
+            using var response = await http.PostAsync($"/bot{token}/{method}", content, deadline.Token);
+            var text = await response.Content.ReadAsStringAsync(deadline.Token);
             var json = JsonNode.Parse(text);
             if (json?["ok"]?.GetValue<bool>() != true)
                 throw new TelegramException($"Telegram {method} failed ({(int)response.StatusCode}): {json?["description"]?.GetValue<string>()}");
             return json["result"];
         }
-        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
+        catch (TelegramException)
         {
-            // Not e.Message: it can carry the request URL, and the URL carries the token.
-            throw new TelegramException($"Telegram {method} failed: {e.GetType().Name}.");
+            throw;
         }
         catch (TaskCanceledException) when (!cancellation.IsCancellationRequested)
         {
             throw new TelegramException($"Telegram {method} timed out.");
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Never e.Message: it can carry the request URL, and the URL carries the token.
+            throw new TelegramException($"Telegram {method} failed: {e.GetType().Name}.");
         }
     }
 }

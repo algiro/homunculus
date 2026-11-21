@@ -33,4 +33,57 @@ public class TelegramTests
         Assert.That(TelegramApi.ParseUpdates(null), Is.Empty);
         Assert.That(TelegramApi.ParseUpdates(JsonNode.Parse("{}")), Is.Empty);
     }
+
+    [Test]
+    public async Task RequestsGoToTheBotApiEvenThoughATokenLooksLikeAUriScheme()
+    {
+        // A real token looks like "123456789:AAH..."; as a relative URL the part before the colon reads as a URI scheme.
+        var handler = new RecordingHandler("""{"ok":true,"result":[]}""");
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.telegram.org/") };
+
+        await new TelegramApi(http, "123456789:AAH-example_token").GetUpdatesAsync(0, 1, CancellationToken.None);
+
+        Assert.That(handler.Requests.Single()!.ToString(), Is.EqualTo("https://api.telegram.org/bot123456789:AAH-example_token/getUpdates"));
+    }
+
+    [Test]
+    public async Task TheBodyIsSentWithAContentLengthNotChunked()
+    {
+        var handler = new RecordingHandler("""{"ok":true,"result":{"message_id":1}}""");
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.telegram.org/") };
+
+        await new TelegramApi(http, "123456789:AAH-example_token").SendMessageAsync(42, "hi", null, CancellationToken.None);
+
+        Assert.That(handler.ContentLengths.Single(), Is.Not.Null, "a chunked body (no Content-Length) makes the Bot API wait forever");
+        Assert.That(handler.TransferEncodingChunked.Single(), Is.Not.True);
+    }
+
+    [Test]
+    public void AnyFailureOfACallIsReportedAsATelegramException()
+    {
+        using var http = new HttpClient(new ThrowingHandler()) { BaseAddress = new Uri("https://api.telegram.org/") };
+
+        Assert.ThrowsAsync<TelegramException>(() => new TelegramApi(http, "1:a").GetUpdatesAsync(0, 1, CancellationToken.None));
+    }
+
+    private sealed class RecordingHandler(string body) : HttpMessageHandler
+    {
+        public List<Uri?> Requests { get; } = [];
+        public List<long?> ContentLengths { get; } = [];
+        public List<bool?> TransferEncodingChunked { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request.RequestUri);
+            ContentLengths.Add(request.Content?.Headers.ContentLength);
+            TransferEncodingChunked.Add(request.Headers.TransferEncodingChunked);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
+    }
+
+    private sealed class ThrowingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The 'bot1' scheme is not supported.");
+    }
 }

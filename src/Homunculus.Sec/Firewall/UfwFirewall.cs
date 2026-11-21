@@ -3,36 +3,27 @@ using System.Net;
 namespace Homunculus.Sec.Firewall;
 
 /// <summary>
-/// Blocks addresses with <c>ufw</c>, through <c>sudo -n</c> (never prompting) so the service can run as an ordinary user whose
-/// sudoers entry allows only these two commands. The address is parsed and re-formatted before it goes anywhere near a command.
+/// Blocks addresses through a small root-owned wrapper around <c>ufw</c> (<c>deploy/homunculus-sec-ufw</c>), started with
+/// <c>sudo -n</c> so it never prompts. The service's sudoers entry names only that wrapper, which validates the address again and
+/// is the only place that talks to <c>ufw</c>. The address is parsed and re-formatted here before it goes anywhere near a command.
 /// </summary>
-public sealed class UfwFirewall(IProcessRunner runner, bool useSudo = true) : IFirewall
+public sealed class UfwFirewall(IProcessRunner runner, string helperPath = UfwFirewall.DefaultHelper) : IFirewall
 {
-    public const string RuleComment = "homunculus-sec";
+    public const string DefaultHelper = "/usr/local/sbin/homunculus-sec-ufw";
 
-    public async Task BlockAsync(string ip, CancellationToken cancellation)
+    public Task BlockAsync(string ip, CancellationToken cancellation) => RunAsync("block", ip, cancellation);
+
+    public Task UnblockAsync(string ip, CancellationToken cancellation) => RunAsync("unblock", ip, cancellation);
+
+    private async Task RunAsync(string action, string ip, CancellationToken cancellation)
     {
         var address = Canonical(ip);
-        // Rule 1 so the deny comes before any broad allow; an empty rule set has no position 1, so fall back to a plain deny.
-        var result = await RunUfwAsync(["insert", "1", "deny", "from", address, "comment", RuleComment], cancellation);
-        if (result.ExitCode != 0 && result.Output.Contains("Invalid position", StringComparison.OrdinalIgnoreCase))
-            result = await RunUfwAsync(["deny", "from", address, "comment", RuleComment], cancellation);
+        var result = await runner.RunAsync("sudo", ["-n", helperPath, action, address], cancellation);
 
-        if (result.ExitCode != 0) throw new FirewallException($"ufw could not block {address}: {result.Output}");
+        // Removing a rule that is already gone is the outcome that was wanted.
+        if (result.ExitCode != 0 && !(action == "unblock" && result.Output.Contains("non-existent", StringComparison.OrdinalIgnoreCase)))
+            throw new FirewallException($"Could not {action} {address}: {result.Output}");
     }
-
-    public async Task UnblockAsync(string ip, CancellationToken cancellation)
-    {
-        var address = Canonical(ip);
-        var result = await RunUfwAsync(["delete", "deny", "from", address], cancellation);
-        if (result.ExitCode != 0 && !result.Output.Contains("non-existent", StringComparison.OrdinalIgnoreCase))
-            throw new FirewallException($"ufw could not unblock {address}: {result.Output}");
-    }
-
-    private Task<ProcessResult> RunUfwAsync(string[] arguments, CancellationToken cancellation) =>
-        useSudo
-            ? runner.RunAsync("sudo", ["-n", "ufw", .. arguments], cancellation)
-            : runner.RunAsync("ufw", arguments, cancellation);
 
     private static string Canonical(string ip) =>
         IPAddress.TryParse(ip, out var address) ? address.ToString() : throw new FirewallException($"'{ip}' is not an IP address.");

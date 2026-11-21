@@ -3,6 +3,7 @@ using Homunculus.Llm;
 using Homunculus.Sec.Analysis;
 using Homunculus.Sec.Detection;
 using Homunculus.Sec.Firewall;
+using Homunculus.Sec.Logs;
 using Homunculus.Sec.Safety;
 using Homunculus.Sec.Service;
 using Homunculus.Sec.Telegram;
@@ -247,6 +248,69 @@ public class ServiceTests
         Assert.That(_telegram.Answers.Last(), Does.Contain("Could not block"));
     }
 
+    private SecMonitor MonitorWith(Action<string> report, string? startup = null, TimeSpan? retry = null)
+    {
+        var allowlist = new Allowlist();
+        var analyst = new Analyst(_model);
+        WatchedLog[] logs = [new(new LogTailer(Path.Combine(_dir, "access.log"), TimeSpan.FromMilliseconds(20)), new NginxAccessParser())];
+        return new SecMonitor(logs, [], analyst, new ProposalGuard(allowlist), _book, _telegram, Chat, _blocks, _chat, report: report, startupMessage: startup, retryDelay: retry);
+    }
+
+    [Test]
+    public async Task TheServiceAnnouncesItselfInTheChatWhenItStarts()
+    {
+        var reports = new List<string>();
+        var monitor = MonitorWith(reports.Add, "started");
+        _telegram.OnPoll = async cancellation =>
+        {
+            await Task.Delay(Timeout.Infinite, cancellation);
+            return [];
+        };
+        using var cancellation = new CancellationTokenSource();
+
+        var run = monitor.RunAsync(cancellation.Token);
+        await Task.Delay(100);
+        await cancellation.CancelAsync();
+        await run;
+
+        Assert.That(_telegram.Sent.Select(m => m.Html), Is.EqualTo(new[] { "started" }));
+        Assert.That(reports, Does.Contain("Startup message sent to Telegram."));
+    }
+
+    [Test]
+    public void TheServiceStopsWithTheErrorWhenOneOfItsLoopsDies()
+    {
+        var monitor = MonitorWith(_ => { });
+        _telegram.OnPoll = _ => throw new NotSupportedException("boom");
+
+        var e = Assert.ThrowsAsync<NotSupportedException>(() => monitor.RunAsync(CancellationToken.None));
+
+        Assert.That(e!.Message, Is.EqualTo("boom"));
+    }
+
+    [Test]
+    public async Task ATelegramOutageIsReportedOnceAndPollingGoesOn()
+    {
+        var reports = new List<string>();
+        var monitor = MonitorWith(reports.Add, retry: TimeSpan.FromMilliseconds(30));
+        var calls = 0;
+        _telegram.OnPoll = async cancellation =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) throw new TelegramException("Telegram getUpdates failed: HttpRequestException.");
+            await Task.Delay(Timeout.Infinite, cancellation);
+            return [];
+        };
+        using var cancellation = new CancellationTokenSource();
+
+        var run = monitor.RunAsync(cancellation.Token);
+        await Task.Delay(500);
+        await cancellation.CancelAsync();
+        await run;
+
+        Assert.That(reports.Count(r => r.Contains("polling failed", StringComparison.Ordinal)), Is.EqualTo(1));
+        Assert.That(calls, Is.GreaterThanOrEqualTo(2));
+    }
+
     private sealed class ThrowingFirewall : IFirewall
     {
         public Task BlockAsync(string ip, CancellationToken cancellation) => throw new FirewallException("sudo: a password is required");
@@ -277,8 +341,10 @@ public class ServiceTests
         public List<long> Cleared { get; } = [];
         public List<string?> Answers { get; } = [];
 
+        public Func<CancellationToken, Task<IReadOnlyList<Update>>>? OnPoll { get; set; }
+
         public Task<IReadOnlyList<Update>> GetUpdatesAsync(long offset, int timeoutSeconds, CancellationToken cancellation) =>
-            Task.FromResult<IReadOnlyList<Update>>([]);
+            OnPoll?.Invoke(cancellation) ?? Task.FromResult<IReadOnlyList<Update>>([]);
 
         public Task<long> SendMessageAsync(long chatId, string html, IReadOnlyList<Button>? buttons, CancellationToken cancellation)
         {

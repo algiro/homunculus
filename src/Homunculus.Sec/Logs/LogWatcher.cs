@@ -20,6 +20,7 @@ public sealed class LogWatcher(IReadOnlyList<WatchedLog> logs, IReadOnlyList<IDe
 
         try
         {
+            // A producer that fails completes the channel with its error, so it surfaces here instead of vanishing.
             await foreach (var entry in channel.Reader.ReadAllAsync(CancellationToken.None))
             {
                 foreach (var detector in detectors)
@@ -44,6 +45,10 @@ public sealed class LogWatcher(IReadOnlyList<WatchedLog> logs, IReadOnlyList<IDe
         catch (OperationCanceledException)
         {
             // Shutting down.
+        }
+        catch (Exception e)
+        {
+            writer.TryComplete(new InvalidOperationException($"Following {log.Tailer.Path} failed: {e.Message}", e));
         }
     }
 }

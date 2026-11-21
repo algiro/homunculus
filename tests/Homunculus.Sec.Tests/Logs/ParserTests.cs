@@ -87,6 +87,31 @@ public class ParserTests
         Assert.That(new AuthLogParser(clock).Parse(line)!.Time.Year, Is.EqualTo(2026));
     }
 
+    [TestCase("Connection closed by invalid user panino 37.132.135.41 port 57648 [preauth]", "panino", "37.132.135.41")]
+    [TestCase("Connection closed by authenticating user root 203.0.113.9 port 4000 [preauth]", "root", "203.0.113.9")]
+    [TestCase("Disconnected from invalid user admin 198.51.100.7 port 1234 [preauth]", "admin", "198.51.100.7")]
+    [TestCase("Connection reset by authenticating user ubuntu 2001:db8::1 port 22 [preauth]", "ubuntu", "2001:db8::1")]
+    [TestCase("Connection closed by invalid user a b 192.0.2.1 port 9 [preauth]", "a b", "192.0.2.1")]
+    public void Auth_ParsesAConnectionDroppedBeforeLogin(string message, string user, string ip)
+    {
+        var entry = new AuthLogParser().Parse($"2026-11-19T10:15:30.123456+00:00 web sshd[1234]: {message}")!;
+
+        Assert.That(entry.Kind, Is.EqualTo(EntryKind.PreauthDrop));
+        Assert.That(entry.User, Is.EqualTo(user));
+        Assert.That(entry.Ip, Is.EqualTo(ip));
+    }
+
+    [TestCase("Invalid user panino from 37.132.135.41 port 57648")]
+    [TestCase("Connection closed by 203.0.113.9 port 4000")]
+    [TestCase("Received disconnect from 203.0.113.9 port 4000:11: Bye Bye [preauth]")]
+    [TestCase("banner exchange: Connection from 203.0.113.9 port 4000: invalid format")]
+    public void Auth_OtherSshdNoiseIsNotADrop(string message)
+    {
+        var entry = new AuthLogParser().Parse($"2026-11-19T10:15:30.123456+00:00 web sshd[1234]: {message}");
+
+        Assert.That(entry?.Kind, Is.Not.EqualTo(EntryKind.PreauthDrop));
+    }
+
     [Test]
     public void Auth_IgnoresOtherPrograms() =>
         Assert.That(new AuthLogParser().Parse("2026-11-19T10:15:30+00:00 web sudo: alex : TTY=pts/0 ; COMMAND=/bin/ls"), Is.Null);

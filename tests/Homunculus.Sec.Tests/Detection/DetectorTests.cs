@@ -134,6 +134,28 @@ public class DetectorTests
         Assert.That(findings[0].Rule, Is.EqualTo(DefaultDetectors.SshBruteForce));
     }
 
+    [Test]
+    public void SshBruteForce_FiresOnConnectionsDroppedBeforeLoginOnAKeyOnlyServer()
+    {
+        var detectors = DefaultDetectors.Create();
+        LogEntry Drop(double s) => new(LogSource.Auth, EntryKind.PreauthDrop, Start.AddSeconds(s), "8.8.8.8", $"drop {s}", User: "root");
+
+        var findings = Enumerable.Range(0, 5).SelectMany(i => Feed(detectors, Drop(i))).ToList();
+
+        Assert.That(findings.Select(f => f.Rule), Is.EqualTo(new[] { DefaultDetectors.SshBruteForce }));
+    }
+
+    [Test]
+    public void SshBruteForce_DoesNotCountTheInvalidUserLineThatPrecedesEachDrop()
+    {
+        var detectors = DefaultDetectors.Create();
+        LogEntry Invalid(double s) => new(LogSource.Auth, EntryKind.InvalidUser, Start.AddSeconds(s), "8.8.8.8", $"invalid {s}", User: "root");
+
+        var findings = Enumerable.Range(0, 50).SelectMany(i => Feed(detectors, Invalid(i))).ToList();
+
+        Assert.That(findings, Is.Empty);
+    }
+
     private static IEnumerable<Finding> Feed(IReadOnlyList<IDetector> detectors, LogEntry entry) =>
         detectors.Select(d => d.Observe(entry)).OfType<Finding>();
 }

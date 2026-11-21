@@ -7,7 +7,7 @@ namespace Homunculus.Sec.Logs;
 /// Follows a text file like <c>tail -f</c>: yields each complete line that is appended. Survives the file missing, being truncated,
 /// or being replaced by logrotate (it is reopened by path on every poll, and a shorter file starts again from the top).
 /// </summary>
-public sealed class LogTailer(string path, TimeSpan? pollInterval = null, bool fromStart = false)
+public sealed class LogTailer(string path, TimeSpan? pollInterval = null, bool fromStart = false, Action<string>? report = null)
 {
     private const int ChunkBytes = 64 * 1024;
     private const int MaxBytesPerPoll = 4 * 1024 * 1024;
@@ -17,6 +17,7 @@ public sealed class LogTailer(string path, TimeSpan? pollInterval = null, bool f
     private readonly StringBuilder _partial = new();
     private Decoder _decoder = Encoding.UTF8.GetDecoder();
     private long _position = -1;
+    private bool _unreadable;
 
     public string Path => path;
 
@@ -63,12 +64,20 @@ public sealed class LogTailer(string path, TimeSpan? pollInterval = null, bool f
             }
 
             _position = stream.Position;
+            _unreadable = false;
             return (lines, total >= MaxBytesPerPoll);
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {
             // Mid-rotation: the next file starts from its beginning.
             Reset();
+            return (lines, false);
+        }
+        catch (UnauthorizedAccessException e)
+        {
+            // Keep trying (the permission may be fixed later), but say so once instead of staying silent.
+            if (!_unreadable) report?.Invoke($"Cannot read {path}: {e.Message}");
+            _unreadable = true;
             return (lines, false);
         }
         catch (IOException)

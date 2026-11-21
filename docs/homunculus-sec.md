@@ -16,7 +16,9 @@ auth.log (sshd)  ─┘                                                        �
 
 1. **Tails** `nginx/access.log`, `nginx/error.log` and `auth.log` (handles rotation and truncation).
 2. **Detects** with plain rules, per source IP, in a sliding window: request floods, bursts of 404 and of 401/403, scanner paths
-   (`/.env`, `wp-login.php`, `phpmyadmin`, ...), SSH password guessing, and nginx rate-limit hits. Each rule fires at most once per
+   (`/.env`, `wp-login.php`, `phpmyadmin`, ...), SSH password guessing, and nginx rate-limit hits. SSH guessing is counted from failed logins **and** from connections dropped
+   before login (`Connection closed by invalid user …`): a server that accepts only keys never logs "Failed password", and every
+   guess shows up as such a dropped connection instead. Each rule fires at most once per
    IP per 10 minutes.
 3. **Analyses** each finding with the model: how serious, block or ignore, and for how long. The model sees only the flagged log
    lines, never the whole log. If it is down or answers badly, a default recommendation is used and the alert says so.
@@ -40,7 +42,9 @@ Commands: `/pending`, `/blocks`, `/unblock <ip>`.
   `neverBlock`. A block proposal for a protected address is turned into "ignore".
 - **Only your chat is obeyed.** Messages and button presses from any other user are dropped without a reply.
 - The firewall command is run **without a shell**, with the address parsed and re-formatted first. The service runs as an
-  unprivileged user whose sudoers entry allows exactly three `ufw` commands.
+  unprivileged user whose sudoers entry allows exactly one program as root: `/usr/local/sbin/homunculus-sec-ufw`
+  (`deploy/homunculus-sec-ufw`). That wrapper checks the address again (public, canonical form only: never a private,
+  loopback or link-local one) and is the only thing that calls `ufw`.
 - Blocks **expire** (default 24 h, at most `maxBlockHours`) and are remembered across restarts in a state file.
 - The bot token is read from the environment and never appears in logs or error messages.
 
@@ -73,8 +77,8 @@ sudo cp deploy/config.example.json /etc/homunculus-sec/config.json   # edit: cha
 sudo cp deploy/env.example /etc/homunculus-sec/env                   # edit: the bot token
 sudo chmod 600 /etc/homunculus-sec/env
 
-sudo cp deploy/homunculus-sec.sudoers /etc/sudoers.d/homunculus-sec
-sudo chmod 440 /etc/sudoers.d/homunculus-sec
+sudo install -m 0755 -o root -g root deploy/homunculus-sec-ufw /usr/local/sbin/homunculus-sec-ufw
+sudo install -m 0440 -o root -g root deploy/homunculus-sec.sudoers /etc/sudoers.d/homunculus-sec
 sudo visudo -cf /etc/sudoers.d/homunculus-sec                         # must say "parsed OK"
 
 sudo cp deploy/homunculus-sec.service /etc/systemd/system/
@@ -94,12 +98,25 @@ Provoke a finding from another machine (for example `for i in 1 2 3; do curl -s 
 arrives, then check the sudo rule works for the service user:
 
 ```
-sudo -u homunculus-sec sudo -n ufw insert 1 deny from 192.0.2.1 comment homunculus-sec
-sudo -u homunculus-sec sudo -n ufw delete deny from 192.0.2.1
-sudo -u homunculus-sec sudo -n ufw status          # must be refused: it is not on the list
+sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-ufw block 198.51.100.1
+sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-ufw unblock 198.51.100.1
+sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-ufw block 10.0.0.1   # refused: private address
+sudo -u homunculus-sec sudo -n ufw status                                          # refused: not on the list
 ```
 
 When all of that behaves, set `"dryRun": false` and `sudo systemctl restart homunculus-sec`.
+
+### Shortcut: one script for everything that needs root
+
+`deploy/setup-root.sh` does the root-only steps above in one idempotent run (user, program, config, wrapper, sudoers rule with a
+`visudo` check, systemd units, logrotate). It never enables ufw and never touches Docker or iptables rules. When nginx runs in
+a Docker container it also installs a small service that copies that container's logs to `/var/log/homunculus-sec/nginx.log`, so
+the watcher needs no Docker rights:
+
+```
+sudo ./setup-root.sh --binary ./homunculus-sec --nginx-container NAME --chat-id 123456789
+sudo ./setup-root.sh --uninstall          # removes services, sudoers rule and program; keeps config, state and the user
+```
 
 ## Configuration
 

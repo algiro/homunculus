@@ -19,6 +19,12 @@ public enum EntryKind
     /// <summary>A login attempt for a user that does not exist.</summary>
     InvalidUser,
 
+    /// <summary>
+    /// A connection that ended before it logged in ("Connection closed by invalid user …", "Disconnected from authenticating user …").
+    /// One per attempt, so this is how password guessing shows up on a server that only accepts keys and so never logs "Failed password".
+    /// </summary>
+    PreauthDrop,
+
     /// <summary>A successful login.</summary>
     LoginSuccess,
 }
