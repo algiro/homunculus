@@ -30,6 +30,9 @@ public sealed record SecSettings
     /// <summary>Alert and propose as usual, but never run a firewall command.</summary>
     public bool DryRun { get; init; }
 
+    /// <summary>"iptables" blocks the host and Docker-published ports; "ufw" uses ufw (which must be enabled, and does not reach Docker ports).</summary>
+    public string Firewall { get; init; } = "iptables";
+
     private static readonly JsonSerializerOptions FileOptions = new() { PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     public const string EnvPrefix = "HOMUNCULUS_SEC_";
@@ -79,6 +82,7 @@ public sealed record SecSettings
             EventLogPath = Get("EVENT_LOG") ?? EventLogPath,
             MaxBlockHours = hours is null ? MaxBlockHours : int.Parse(hours, CultureInfo.InvariantCulture),
             DryRun = Get("DRY_RUN") is { } dry ? dry is "1" or "true" or "yes" : DryRun,
+            Firewall = Get("FIREWALL")?.ToLowerInvariant() ?? Firewall,
         };
     }
 
@@ -88,6 +92,7 @@ public sealed record SecSettings
         var problems = new List<string>();
         if (string.IsNullOrWhiteSpace(TelegramToken)) problems.Add($"The Telegram bot token is missing (set {EnvPrefix}TELEGRAM_TOKEN).");
         if (TelegramChatId == 0) problems.Add($"The Telegram chat id is missing (set {EnvPrefix}TELEGRAM_CHAT_ID).");
+        if (Firewall is not ("iptables" or "ufw")) problems.Add("Firewall must be \"iptables\" or \"ufw\".");
         if (MaxBlockHours < 1) problems.Add("MaxBlockHours must be at least 1.");
         if (!Uri.TryCreate(ModelBaseUrl, UriKind.Absolute, out _)) problems.Add("ModelBaseUrl is not a valid URL.");
         return problems;

@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
 # homunculus-sec: the steps that need root, in one script. Run it with sudo; it is safe to run again.
 #
-#   sudo ./setup-root.sh --binary ./homunculus-sec [--nginx-container NAME] [--chat-id ID] [--model NAME]
+#   sudo ./setup-root.sh --binary ./homunculus-sec [--nginx-container NAME] [--chat-id ID] [--model NAME] [--firewall iptables|ufw]
 #
 # What it does (and nothing else):
 #   1. creates the system user "homunculus-sec" and adds it to the "adm" group (so it can read /var/log/auth.log)
 #   2. installs the program into /opt/homunculus-sec
 #   3. installs /etc/homunculus-sec/config.json and /etc/homunculus-sec/env, only if they do not exist yet (dry-run on)
-#   4. installs /usr/local/sbin/homunculus-sec-ufw (validates the address, then calls ufw) and a sudoers rule that lets that
-#      user run only that wrapper (the rule is checked with visudo before it is used)
+#   4. installs the firewall wrappers /usr/local/sbin/homunculus-sec-fw (iptables: INPUT and Docker's DOCKER-USER) and
+#      /usr/local/sbin/homunculus-sec-ufw, each validating the address itself, and a sudoers rule that lets that user run
+#      only those two wrappers (the rule is checked with visudo before it is used)
 #   5. installs two systemd services:
 #        homunculus-sec             the watcher
 #        homunculus-sec-nginx-logs  copies the logs of an nginx container to /var/log/homunculus-sec/nginx.log
 #                                   (needed when nginx runs in Docker: the service user then needs no Docker rights)
 #   6. installs a logrotate rule for that copied log
 #
-# What it does NOT do: enable ufw, touch Docker or iptables rules, install Ollama, or put the bot token anywhere.
-# Use --uninstall to remove the services, the sudoers rule and the program (config, state and user are kept).
+# What it does NOT do: enable ufw, add any firewall rule or change any policy (rules appear only when a block is approved, and
+# only in their own HOMUNCULUS-SEC chain), install Ollama, or put the bot token anywhere.
+# Use --uninstall to remove the services, the sudoers rule, the wrappers, the program and the HOMUNCULUS-SEC iptables chain
+# (config, state and user are kept).
 
 set -euo pipefail
 
@@ -36,8 +39,12 @@ NGINX_CONTAINER=""
 CHAT_ID="0"
 MODEL="qwen2.5:3b"
 UNINSTALL=0
+FIREWALL="iptables"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WRAPPER_FILE="/usr/local/sbin/homunculus-sec-ufw"
-WRAPPER_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/homunculus-sec-ufw"
+WRAPPER_SOURCE="$HERE/homunculus-sec-ufw"
+FW_WRAPPER_FILE="/usr/local/sbin/homunculus-sec-fw"
+FW_WRAPPER_SOURCE="$HERE/homunculus-sec-fw"
 
 say() { printf '\n==> %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -53,6 +60,7 @@ while [ $# -gt 0 ]; do
         --nginx-container) NGINX_CONTAINER="${2:-}"; shift 2 ;;
         --chat-id) CHAT_ID="${2:-}"; shift 2 ;;
         --model) MODEL="${2:-}"; shift 2 ;;
+        --firewall) FIREWALL="${2:-}"; shift 2 ;;
         --uninstall) UNINSTALL=1; shift ;;
         -h|--help) usage 0 ;;
         *) printf 'unknown option: %s\n\n' "$1" >&2; usage 2 ;;
@@ -65,8 +73,16 @@ command -v systemctl >/dev/null || die "systemd is required."
 if [ "$UNINSTALL" -eq 1 ]; then
     say "Removing services, sudoers rule and program (config, state and the user are kept)"
     systemctl disable --now homunculus-sec.service homunculus-sec-nginx-logs.service 2>/dev/null || true
-    rm -f "$SERVICE_FILE" "$BRIDGE_FILE" "$SUDOERS_FILE" "$LOGROTATE_FILE" "$WRAPPER_FILE"
+    rm -f "$SERVICE_FILE" "$BRIDGE_FILE" "$SUDOERS_FILE" "$LOGROTATE_FILE" "$WRAPPER_FILE" "$FW_WRAPPER_FILE"
     rm -rf "$INSTALL_DIR"
+    # Take the blocks out of the firewall too: the chain and the hooks that point at it.
+    for tool in iptables ip6tables; do
+        command -v "$tool" >/dev/null || continue
+        for parent in INPUT DOCKER-USER; do
+            while "$tool" -w -C "$parent" -j HOMUNCULUS-SEC 2>/dev/null; do "$tool" -w -D "$parent" -j HOMUNCULUS-SEC; done
+        done
+        "$tool" -w -F HOMUNCULUS-SEC 2>/dev/null && "$tool" -w -X HOMUNCULUS-SEC 2>/dev/null || true
+    done
     systemctl daemon-reload
     echo "Done. Left in place: $CONFIG_DIR, $STATE_DIR, $LOG_DIR and the user $SERVICE_USER."
     exit 0
@@ -78,9 +94,14 @@ fi
 case "$CHAT_ID" in ''|*[!0-9-]*) die "--chat-id must be a number." ;; esac
 case "$MODEL" in ''|*[!A-Za-z0-9_.:/-]*) die "--model contains unexpected characters." ;; esac
 command -v visudo >/dev/null || die "visudo is required to check the sudoers rule."
-[ -x /usr/sbin/ufw ] || die "ufw is not installed at /usr/sbin/ufw."
+case "$FIREWALL" in
+    iptables) [ -x /usr/sbin/iptables ] || die "iptables is not installed at /usr/sbin/iptables." ;;
+    ufw) [ -x /usr/sbin/ufw ] || die "ufw is not installed at /usr/sbin/ufw." ;;
+    *) die "--firewall must be iptables or ufw." ;;
+esac
 command -v python3 >/dev/null || die "python3 is required (the wrapper uses it to validate addresses)."
 [ -f "$WRAPPER_SOURCE" ] || die "homunculus-sec-ufw must be next to this script (looked for $WRAPPER_SOURCE)."
+[ -f "$FW_WRAPPER_SOURCE" ] || die "homunculus-sec-fw must be next to this script (looked for $FW_WRAPPER_SOURCE)."
 
 if [ -n "$NGINX_CONTAINER" ]; then
     case "$NGINX_CONTAINER" in *[!A-Za-z0-9_.-]*) die "--nginx-container contains unexpected characters." ;; esac
@@ -120,6 +141,9 @@ if [ ! -e "$CONFIG_DIR/config.json" ]; then
   // Dry run: alerts and buttons work, but no firewall command is ever run. Set to false only after the checks in docs/deploy.md.
   "dryRun": true,
 
+  // iptables: blocks the host and Docker-published ports. ufw: needs ufw enabled and does not reach Docker ports.
+  "firewall": "$FIREWALL",
+
   "nginxAccessLog": "$ACCESS_LOG",
   "nginxErrorLog": "$ERROR_LOG",
   "authLog": "/var/log/auth.log",
@@ -155,15 +179,16 @@ else
     echo "kept existing $CONFIG_DIR/env"
 fi
 
-# ---- 4. the ufw wrapper and the sudoers rule (validated before it is installed) ---------------------------------------
-say "ufw wrapper $WRAPPER_FILE and sudoers rule $SUDOERS_FILE"
+# ---- 4. the firewall wrappers and the sudoers rule (validated before it is installed) --------------------------------
+say "firewall wrappers $FW_WRAPPER_FILE, $WRAPPER_FILE and sudoers rule $SUDOERS_FILE"
+install -m 0755 -o root -g root "$FW_WRAPPER_SOURCE" "$FW_WRAPPER_FILE"
 install -m 0755 -o root -g root "$WRAPPER_SOURCE" "$WRAPPER_FILE"
 TMP_SUDOERS="$(mktemp)"
 trap 'rm -f "$TMP_SUDOERS"' EXIT
 cat > "$TMP_SUDOERS" <<EOF
-# homunculus-sec: the service user may run exactly one program as root, without a password: the wrapper, which checks the
-# address itself and then calls ufw.
-$SERVICE_USER ALL=(root) NOPASSWD: $WRAPPER_FILE
+# homunculus-sec: the service user may run exactly these two programs as root, without a password: the wrappers, which check the
+# address themselves and then call iptables or ufw.
+$SERVICE_USER ALL=(root) NOPASSWD: $FW_WRAPPER_FILE, $WRAPPER_FILE
 EOF
 visudo -cf "$TMP_SUDOERS" >/dev/null || die "the generated sudoers rule did not pass visudo; nothing was installed."
 install -m 0440 -o root -g root "$TMP_SUDOERS" "$SUDOERS_FILE"
@@ -266,13 +291,14 @@ if [ -n "$NGINX_CONTAINER" ]; then
     echo "* The client addresses in the copied log must be real visitors, not a Docker gateway or a CDN. Look at a few lines in a minute:"
     echo "    sudo tail -n 3 $LOG_DIR/nginx.log"
 fi
-if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -qi inactive; then
+echo "* Blocking is configured as '$FIREWALL', and the service is still in dry run (config.json: dryRun). Before turning dry run off,"
+echo "  put your own addresses in neverBlock, and read the 'Going live' section of docs/deploy.md."
+if [ "$FIREWALL" = "iptables" ]; then
+    echo "* An approved block adds a DROP rule in the HOMUNCULUS-SEC chain (hooked first in INPUT and, with Docker, DOCKER-USER)."
+    echo "  See them with: sudo iptables -S HOMUNCULUS-SEC. They are re-applied by the service when it starts."
+elif command -v ufw >/dev/null && ufw status 2>/dev/null | grep -qi inactive; then
     echo "* ufw is installed but INACTIVE, so no ufw rule blocks anything yet. This script does not enable it: do that yourself,"
-    echo "  after allowing SSH, and only when you have read the Docker note in docs/homunculus-sec.md."
-fi
-if command -v docker >/dev/null; then
-    echo "* Docker-published ports (for example 80 and 443) bypass ufw. A ufw block will not stop web traffic to a container;"
-    echo "  it does protect SSH and anything that is not published by Docker."
+    echo "  after allowing SSH. Docker-published ports bypass ufw even then; use --firewall iptables to cover them."
 fi
 echo "* The Ollama server for model '$MODEL' must be reachable at http://127.0.0.1:11434 (it is not installed by this script)."
 echo

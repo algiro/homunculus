@@ -1,0 +1,84 @@
+#!/bin/bash
+# homunculus-sec-fw: the only thing the homunculus-sec service may run as root (through sudo), iptables flavour.
+#
+#   homunculus-sec-fw block   <ip>   drop all traffic from <ip>: to this host (INPUT) and to Docker containers (DOCKER-USER)
+#   homunculus-sec-fw unblock <ip>   remove that block again
+#
+# Install as /usr/local/sbin/homunculus-sec-fw, owner root, mode 0755. The service user must not be able to write to it.
+#
+# How it works: every block is one rule in its own chain, HOMUNCULUS-SEC. The chain is hooked once, at the top of INPUT and of
+# DOCKER-USER (if Docker is installed). Because the hook is first, it also cuts connections that are already established.
+# Nothing else is touched: no default policy is changed, ufw is not needed, other rules are left alone. To see the blocks:
+#   iptables -S HOMUNCULUS-SEC ; ip6tables -S HOMUNCULUS-SEC
+# Plain iptables rules do not survive a reboot; the service re-applies its saved blocks when it starts, and `block` is idempotent.
+#
+# It validates the address itself, so a bug or compromise in the service cannot turn this into a general root shell.
+
+set -euo pipefail
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+# The commands can be pointed elsewhere for tests. Under sudo the environment is reset, so the service cannot use this.
+IPT4="${HS_FW_IPTABLES:-/usr/sbin/iptables}"
+IPT6="${HS_FW_IP6TABLES:-/usr/sbin/ip6tables}"
+IPCMD="${HS_FW_IP:-/usr/sbin/ip}"
+CHAIN="HOMUNCULUS-SEC"
+
+[ "$#" -eq 2 ] || { echo "usage: $0 block|unblock <ip>" >&2; exit 64; }
+action="$1"
+ip="$2"
+
+# Only a public address in canonical form, and never one of this machine's own addresses. Private, loopback, link-local,
+# multicast and reserved addresses are refused too, so even a bad request cannot lock the administrator or the host out.
+local_addresses="$("$IPCMD" -o addr show 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | tr '\n' ' ')"
+python3 - "$ip" "$local_addresses" <<'PY' || { echo "refused: '$ip' is not a public IP address in canonical form that belongs to someone else" >&2; exit 65; }
+import ipaddress, sys
+text = sys.argv[1]
+try:
+    address = ipaddress.ip_address(text)
+except ValueError:
+    sys.exit(1)
+if str(address) != text:
+    sys.exit(1)
+if address.is_private or address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified or address.is_reserved:
+    sys.exit(1)
+for own in sys.argv[2].split():
+    try:
+        if ipaddress.ip_address(own) == address:
+            sys.exit(1)
+    except ValueError:
+        pass
+PY
+
+if [[ "$ip" == *:* ]]; then ipt="$IPT6"; else ipt="$IPT4"; fi
+
+chain_exists() { "$ipt" -w -n -L "$1" >/dev/null 2>&1; }
+
+ensure_chain() {
+    chain_exists "$CHAIN" || "$ipt" -w -N "$CHAIN"
+    local parent
+    for parent in INPUT DOCKER-USER; do
+        if chain_exists "$parent" && ! "$ipt" -w -C "$parent" -j "$CHAIN" 2>/dev/null; then
+            "$ipt" -w -I "$parent" 1 -j "$CHAIN"
+        fi
+    done
+}
+
+case "$action" in
+    block)
+        ensure_chain
+        "$ipt" -w -C "$CHAIN" -s "$ip" -j DROP 2>/dev/null || "$ipt" -w -A "$CHAIN" -s "$ip" -j DROP
+        echo "blocked $ip"
+        ;;
+    unblock)
+        if chain_exists "$CHAIN"; then
+            while "$ipt" -w -C "$CHAIN" -s "$ip" -j DROP 2>/dev/null; do
+                "$ipt" -w -D "$CHAIN" -s "$ip" -j DROP
+            done
+        fi
+        echo "unblocked $ip"
+        ;;
+    *)
+        echo "usage: $0 block|unblock <ip>" >&2
+        exit 64
+        ;;
+esac

@@ -70,6 +70,14 @@ public class SecSettingsTests
     }
 
     [Test]
+    public void TheFirewallDefaultsToIptablesAndCanBeChosenByEnvironmentButOnlyFromTheKnownOnes()
+    {
+        Assert.That(SecSettings.Load(null, None).Firewall, Is.EqualTo("iptables"));
+        Assert.That(SecSettings.Load(null, name => name.EndsWith("FIREWALL", StringComparison.Ordinal) ? "UFW" : null).Firewall, Is.EqualTo("ufw"));
+        Assert.That((new SecSettings { TelegramToken = "t", TelegramChatId = 1, Firewall = "nft" }).Problems(), Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void TheShippedExampleConfigurationIsValid()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

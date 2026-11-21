@@ -257,6 +257,32 @@ public class ServiceTests
     }
 
     [Test]
+    public async Task SavedBlocksAreAppliedAgainWhenTheServiceStarts()
+    {
+        await _blocks.BlockAsync("203.0.113.5", TimeSpan.FromHours(5), "earlier run", CancellationToken.None);
+        var firewall = new DryRunFirewall();
+        using var restarted = new BlockManager(firewall, Path.Combine(_dir, "blocks.json"));
+        var reports = new List<string>();
+        var allowlist = new Allowlist();
+        WatchedLog[] logs = [new(new LogTailer(Path.Combine(_dir, "access.log"), TimeSpan.FromMilliseconds(20)), new NginxAccessParser())];
+        var monitor = new SecMonitor(logs, [], new Analyst(_model), new ProposalGuard(allowlist), _book, _telegram, Chat, restarted, _chat, report: reports.Add);
+        _telegram.OnPoll = async cancellation =>
+        {
+            await Task.Delay(Timeout.Infinite, cancellation);
+            return [];
+        };
+        using var cancellation = new CancellationTokenSource();
+
+        var run = monitor.RunAsync(cancellation.Token);
+        await Task.Delay(150);
+        await cancellation.CancelAsync();
+        await run;
+
+        Assert.That(firewall.Actions, Is.EqualTo(new[] { "block 203.0.113.5" }));
+        Assert.That(reports, Does.Contain("Re-applied 1 saved block(s) to the firewall."));
+    }
+
+    [Test]
     public async Task TheServiceAnnouncesItselfInTheChatWhenItStarts()
     {
         var reports = new List<string>();
