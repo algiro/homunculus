@@ -74,6 +74,37 @@ public class AnalystTests
     }
 
     [Test]
+    public async Task FallsBackWhenTheModelServerHangsUntilTheHttpTimeout()
+    {
+        var model = new FakeModel(null, new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout."));
+
+        var proposal = await new Analyst(model).AnalyzeAsync(Finding, CancellationToken.None);
+
+        Assert.That(proposal.FromFallback, Is.True);
+    }
+
+    [Test]
+    public async Task AQuestionGetsAnHonestAnswerWhenTheModelHangs()
+    {
+        var model = new FakeModel(null, new TaskCanceledException("timeout"));
+        var proposal = Analyst.Fallback(Finding);
+
+        var answer = await new Analyst(model).AnswerAsync(proposal, "is this real?", CancellationToken.None);
+
+        Assert.That(answer, Does.Contain("did not answer in time"));
+    }
+
+    [Test]
+    public void ARealShutdownIsNotMistakenForATimeout()
+    {
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var model = new FakeModel(null, new OperationCanceledException(cancelled.Token));
+
+        Assert.CatchAsync<OperationCanceledException>(() => new Analyst(model).AnalyzeAsync(Finding, cancelled.Token));
+    }
+
+    [Test]
     public async Task OffersTheModelOnlyTheTwoActions()
     {
         var model = new FakeModel(Reply("""{"severity":"low","action":"ignore","summary":"s","reason":"r"}"""));
@@ -99,13 +130,14 @@ public class AnalystTests
     private static Homunculus.Llm.Reply Reply(string arguments) =>
         new(Message.Assistant(null, [new ToolCall("1", Analyst.ToolName, JsonDocument.Parse(arguments).RootElement)]));
 
-    private sealed class FakeModel(Homunculus.Llm.Reply? reply) : ILanguageModel
+    private sealed class FakeModel(Homunculus.Llm.Reply? reply, Exception? error = null) : ILanguageModel
     {
         public IReadOnlyList<ToolSpec>? Tools { get; private set; }
 
         public Task<Homunculus.Llm.Reply> CompleteAsync(IConversation conversation, IReadOnlyList<ToolSpec> tools, CancellationToken cancellation)
         {
             Tools = tools;
+            if (error is not null) throw error;
             return reply is null ? throw new ModelException("down") : Task.FromResult(reply);
         }
     }
