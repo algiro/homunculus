@@ -20,6 +20,19 @@ public sealed class ProposalGuard(Allowlist allowlist, TimeSpan? maxBlock = null
                 Reason = $"{proposal.Reason} (Not blocked: {proposal.Ip} is on the never-block list.)",
             };
 
+        if (proposal.Action == ActionKind.Ignore && proposal.Finding.Hard)
+        {
+            // The model can be talked into "ignore" by whoever wrote the log text (a user agent that claims to be a search engine, say).
+            // Evidence no ordinary visitor produces always reaches the operator, who decides.
+            return proposal with
+            {
+                Action = ActionKind.BlockIp,
+                Severity = proposal.Severity < Severity.Medium ? Severity.Medium : proposal.Severity,
+                BlockFor = DefaultBlock,
+                Reason = $"{proposal.Reason} (The model suggested ignoring this, but the evidence includes injection strings, paths only scanners request or unusual request methods, so it is shown to you to decide.)",
+            };
+        }
+
         var blockFor = proposal.BlockFor <= TimeSpan.Zero ? DefaultBlock : proposal.BlockFor > _max ? _max : proposal.BlockFor;
         return proposal with { BlockFor = blockFor };
     }

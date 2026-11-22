@@ -14,8 +14,10 @@ public sealed record DetectorOptions
     public int AuthDeniedCount { get; init; } = 20;
     public TimeSpan AuthDeniedWindow { get; init; } = TimeSpan.FromMinutes(1);
 
-    public int ProbeCount { get; init; } = 3;
-    public TimeSpan ProbeWindow { get; init; } = TimeSpan.FromMinutes(10);
+    /// <summary>The web scanner score (see <see cref="WebScannerDetector"/>): points needed, how long points last, and how long an IP stays quiet after an alert.</summary>
+    public int WebScoreThreshold { get; init; } = 10;
+    public TimeSpan WebScoreWindow { get; init; } = TimeSpan.FromHours(1);
+    public TimeSpan WebScoreCooldown { get; init; } = TimeSpan.FromHours(1);
 
     public int SshFailureCount { get; init; } = 5;
     public TimeSpan SshFailureWindow { get; init; } = TimeSpan.FromMinutes(1);

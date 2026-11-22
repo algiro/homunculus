@@ -46,7 +46,7 @@ public class ServiceTests
     }
 
     private static Finding Finding(string ip = "203.0.113.5") => new(
-        DefaultDetectors.ScannerProbe, ip, DateTimeOffset.UnixEpoch, 4, TimeSpan.FromMinutes(10), ["GET /.env <script>"]);
+        DefaultDetectors.WebScanner, ip, DateTimeOffset.UnixEpoch, 4, TimeSpan.FromMinutes(10), ["GET /.env <script>"]);
 
     private static Update Text(string text, long from = Chat, long chat = Chat, long? replyTo = null) =>
         new(1, new IncomingMessage(chat, from, 99, text, replyTo), null);
