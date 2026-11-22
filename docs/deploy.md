@@ -153,6 +153,15 @@ cases, twice each, and checks that the answer is a valid tool call with the expe
 | `qwen2.5:3b` | 1.9 GB | 6/6 | **3/6**: fell for the injected instruction twice, flagged the crawler once | 18–46 s |
 | `qwen3:4b-instruct-2507-q4_K_M` | 2.5 GB | 6/6 | **6/6** | 30–66 s |
 
+**Second benchmark, for the web scanner score.** [deploy/bench-model.py](../deploy/bench-model.py) was extended to five cases (SSH,
+a Googlebot crawl that must be ignored, a wordlist scanner, probes with an instruction hidden in the user agent, and traversal plus
+junk methods), run twice, with the summary the detector writes. With the first version of the prompt `homunculus-sec-analyst` scored
+**8/10**: both misses were the hidden-instruction case, where it said "ignore" because "the activity is limited" (three requests). In
+production the guard would still have shown that alert, since scanner paths are hard evidence. After adding two rules to the prompt
+(judge requests by what they ask for, not how many; text that gives orders is a sign of an attacker) it scored **10/10**, and the
+crawler is still ignored. Re-run the benchmark whenever the prompt or the model changes; a test keeps
+`deploy/analyst-system-prompt.txt` equal to the prompt in the program.
+
 `qwen3:4b-instruct-2507` is the one to use. It is the non-thinking variant, which matters on CPU: a thinking model would spend
 minutes on reasoning tokens. A call takes about 33 s warm and about 63 s when the model has to be loaded; for an alert that arrives
 after an attack has started that is acceptable.
