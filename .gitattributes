@@ -6,3 +6,4 @@
 *.sh text eol=lf
 *.service text eol=lf
 deploy/*.sudoers text eol=lf
+deploy/analyst-system-prompt.txt text eol=lf
