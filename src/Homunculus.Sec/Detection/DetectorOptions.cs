@@ -22,6 +22,18 @@ public sealed record DetectorOptions
     public int SshFailureCount { get; init; } = 5;
     public TimeSpan SshFailureWindow { get; init; } = TimeSpan.FromMinutes(1);
 
+    /// <summary>Slow guessing: many attempts from one address spread over a day, far below the per-minute limit.</summary>
+    public int SshPersistentCount { get; init; } = 50;
+    public TimeSpan SshPersistentWindow { get; init; } = TimeSpan.FromHours(24);
+    public TimeSpan SshPersistentCooldown { get; init; } = TimeSpan.FromHours(24);
+
+    /// <summary>One network (a /24, or a /64 for IPv6) attacking with several addresses, each too quietly to be noticed alone.</summary>
+    public int SubnetMinAddresses { get; init; } = 3;
+    public int SubnetMinEvents { get; init; } = 50;
+    public int SubnetMinEventsPerAddress { get; init; } = 3;
+    public TimeSpan SubnetWindow { get; init; } = TimeSpan.FromHours(24);
+    public TimeSpan SubnetCooldown { get; init; } = TimeSpan.FromHours(24);
+
     public int RateLimitedCount { get; init; } = 10;
     public TimeSpan RateLimitedWindow { get; init; } = TimeSpan.FromMinutes(1);
 }

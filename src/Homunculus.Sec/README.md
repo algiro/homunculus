@@ -70,7 +70,16 @@ quiet for that IP for the cooldown (10 minutes).
 | `not_found_burst` | gets many 404s (fast directory scanning) | 30 in 1 min |
 | `auth_denied_burst` | gets many 401/403 (credential stuffing, probing) | 20 in 1 min |
 | `ssh_brute_force` | has failed SSH logins or pre-login drops | 5 in 1 min |
+| `ssh_persistent` | keeps guessing SSH logins slowly: many attempts spread over a day, never close to the per-minute limit | 50 in 24 h |
 | `rate_limited` | hits nginx's rate limits | 10 in 1 min |
+
+**Networks.** Attackers often spread their guesses over several addresses of one network, each too quiet to trip any per-address rule
+(on the reference server 83% of the SSH attempts came from addresses that never reach the per-minute limit, and 36% from networks
+with several attackers). `NetworkDetector` groups SSH failures by network (a /24 for IPv4, a /64 for IPv6) and raises an `ssh_subnet`
+finding when **at least 3 addresses, each with at least 3 attempts**, together make **at least 50 attempts within 24 hours** (once per
+network per day). The finding's address is the network (`203.0.113.0/24`) and its summary names the busiest addresses. If an address
+of the same network **logged in successfully** during that day the finding carries a **caution**, because blocking the range would cut
+that user off. Replaying the reference server's month of SSH history gives 10 such networks, and none of them had a successful login in that period.
 
 **The web scanner score.** A fixed path list and a rate threshold miss most real scanners: they crawl slowly, use wordlists nobody
 wrote down, or are answered with redirects instead of 404s. So `WebScannerDetector` scores each IP on the access log instead. Each
@@ -138,6 +147,12 @@ goes to the model (which cannot act, see below). An alert cannot be answered twi
 recorded only after the firewall accepted it. Blocking an address again only extends the block. Each minute a sweep removes
 blocks whose time is up (a failed removal is retried next minute), and when the service starts it re-applies the saved blocks that
 are still running, because plain iptables rules do not survive a reboot.
+
+A block can be an address or a **network** (`203.0.113.0/24`). Network blocks are deliberately limited: never wider than a /24 (a /48
+for IPv6), never overlapping a private range or anything in `neverBlock`, never containing the server's own address, always in one
+canonical spelling (no host bits), and kept to at most 48 hours. An alert for a network says so ("block the whole network"), shows
+the caution if there is one, and its button reads "Block range". A blocked range also silences alerts for single addresses inside it.
+`/unblock` accepts an address or a network.
 
 The firewall is reached only through a small **root-owned wrapper script** run with `sudo -n`; the service itself runs as an
 unprivileged user whose sudoers entry names just the wrappers (`deploy/homunculus-sec-fw` for iptables, `…-ufw` for ufw). The
@@ -225,7 +240,8 @@ audit it now and then, and use a model that passes the benchmark (`deploy/bench-
 - The model chooses from `block_ip`/`ignore` and never supplies the IP.
 - Log text is treated as untrusted, cleaned and length-capped before it reaches the model, and escaped before it reaches Telegram.
 - Never-block list: loopback, RFC 1918, link-local, CGNAT and IPv6 private ranges, plus your own `neverBlock` entries. It is
-  enforced when proposing, when approving and when re-applying saved blocks; the wrappers refuse such addresses too.
+  enforced when proposing, when approving and when re-applying saved blocks; the wrappers refuse such addresses too. A network that
+  contains any protected address is protected as a whole, and ranges wider than a /24 (/48 for IPv6) are never blocked.
 - Only your Telegram chat is obeyed.
 - The firewall is reached only through root-owned wrappers that validate the address themselves; no shell is ever involved.
 - Every block expires. If any of the three loops (watching, polling, expiring) dies, the service stops with the error and systemd
@@ -237,9 +253,9 @@ audit it now and then, and use a model that passes the benchmark (`deploy/bench-
 Program.cs            composition root: settings → model, Telegram, firewall, logs → SecMonitor
 SecSettings.cs        JSON file + environment overrides, validation
 Logs/                 LogTailer, LogWatcher, the three parsers, LogEntry
-Detection/            WindowDetector, DefaultDetectors (the six rules), DetectorOptions, Finding
+Detection/            WindowDetector (counting rules), WebScannerDetector (score), NetworkDetector (ssh_subnet), DefaultDetectors, DetectorOptions, Finding
 Analysis/             Analyst (the two model calls), Proposal, ProposalGuard
-Safety/               Allowlist (never-block list)
+Safety/               Allowlist (never-block list), Cidr (addresses and networks in one canonical form)
 Firewall/             IFirewall, HelperFirewall (iptables / ufw wrappers), DryRunFirewall, BlockManager (state, expiry, restore)
 Telegram/             TelegramApi (Bot API client), TelegramConnect (IPv4-first connect), models
 Service/              SecMonitor (the main loop), ChatHandler (your answers), IncidentBook, AlertFormatter
@@ -268,5 +284,6 @@ restore, the settings, and the shipped example configuration.
   restart is refused with an explanation and the buttons are removed (each run puts its own random token in the button data, so an old
   button can never act on a newer alert that reused the number).
 - Only the nginx combined log format and `sshd` lines are understood.
+- Networks are found for SSH only, and only as a /24 (IPv4) or a /64 (IPv6); the web scanner score is per address.
 - Behind a CDN or reverse proxy the logged address is the proxy's: fix nginx's `real_ip` and add the proxy ranges to `neverBlock`.
 - Rate-limiting a single address (as opposed to blocking it) is not offered.

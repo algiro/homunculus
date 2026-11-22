@@ -1,4 +1,5 @@
 using Homunculus.Sec.Analysis;
+using Homunculus.Sec.Safety;
 
 namespace Homunculus.Sec.Service;
 
@@ -63,5 +64,11 @@ public sealed class IncidentBook(int capacity = 200, string? runToken = null)
     public bool HasPendingFor(string ip)
     {
         lock (_incidents) return _incidents.Any(i => i.Status == IncidentStatus.Pending && i.Proposal.Ip == ip);
+    }
+
+    /// <summary>True when an alert waiting for an answer already concerns this address or network, or a network that contains it.</summary>
+    public bool HasPendingCovering(string target)
+    {
+        lock (_incidents) return _incidents.Any(i => i.Status == IncidentStatus.Pending && (i.Proposal.Ip == target || Cidr.Covers(i.Proposal.Ip, target)));
     }
 }

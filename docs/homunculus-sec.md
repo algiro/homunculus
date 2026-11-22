@@ -18,7 +18,7 @@ auth.log (sshd)  ─┘                                                        �
 2. **Detects** with plain rules, per source IP, in a sliding window: request floods, bursts of 404 and of 401/403, a **suspicion score**
    for web scanners (distinct failing paths, malformed requests, unusual methods, injection strings, paths like `/.env` or `phpmyadmin`;
    it catches slow wordlist scans and probes the site answers with a redirect, which no fixed list or rate threshold would),
-   SSH password guessing, and nginx rate-limit hits. SSH guessing is counted from failed logins **and** from connections dropped
+   SSH password guessing (fast, slow over a day, and spread over several addresses of one network), and nginx rate-limit hits. SSH guessing is counted from failed logins **and** from connections dropped
    before login (`Connection closed by invalid user …`): a server that accepts only keys never logs "Failed password", and every
    guess shows up as such a dropped connection instead. Each rule fires at most once per
    IP per 10 minutes.
@@ -106,6 +106,7 @@ sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-fw block <a public
 sudo iptables -S HOMUNCULUS-SEC                                                   # the DROP rule is there
 sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-fw unblock <that address>
 sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-fw block 10.0.0.1  # refused: private address
+sudo -u homunculus-sec sudo -n /usr/local/sbin/homunculus-sec-fw block 8.8.8.0/23 # refused: a network wider than a /24
 sudo -u homunculus-sec sudo -n iptables -S                                        # refused: not on the list
 ```
 

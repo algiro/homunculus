@@ -30,20 +30,36 @@ ip="$2"
 # Only a public address in canonical form, and never one of this machine's own addresses. Private, loopback, link-local,
 # multicast and reserved addresses are refused too, so even a bad request cannot lock the administrator or the host out.
 local_addresses="$("$IPCMD" -o addr show 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | tr '\n' ' ')"
-python3 - "$ip" "$local_addresses" <<'PY' || { echo "refused: '$ip' is not a public IP address in canonical form that belongs to someone else" >&2; exit 65; }
+python3 - "$ip" "$local_addresses" <<'PY' || { echo "refused: '$ip' is not a public address (or a network of at most a /24, or a /48 for IPv6) in canonical form that belongs to someone else" >&2; exit 65; }
 import ipaddress, sys
 text = sys.argv[1]
+SPECIAL = [ipaddress.ip_network(n) for n in (
+    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24",
+    "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
+    "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "100::/64", "2001:db8::/32", "fc00::/7", "fe80::/10", "ff00::/8")]
 try:
-    address = ipaddress.ip_address(text)
+    if "/" in text:
+        net = ipaddress.ip_network(text, strict=True)         # refuses host bits set
+        if str(net) != text:
+            sys.exit(1)
+        if net.prefixlen < (24 if net.version == 4 else 48):  # wider than this would shut out far too many visitors
+            sys.exit(1)
+        if net.prefixlen == net.max_prefixlen:                # one address has its own, shorter, canonical form
+            sys.exit(1)
+    else:
+        address = ipaddress.ip_address(text)
+        if str(address) != text:
+            sys.exit(1)
+        net = ipaddress.ip_network(address)
+        if address.is_private or address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified or address.is_reserved:
+            sys.exit(1)
 except ValueError:
     sys.exit(1)
-if str(address) != text:
-    sys.exit(1)
-if address.is_private or address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified or address.is_reserved:
+if any(net.version == s.version and net.overlaps(s) for s in SPECIAL):
     sys.exit(1)
 for own in sys.argv[2].split():
     try:
-        if ipaddress.ip_address(own) == address:
+        if ipaddress.ip_address(own) in net:
             sys.exit(1)
     except ValueError:
         pass

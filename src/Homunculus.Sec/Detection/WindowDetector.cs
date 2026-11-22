@@ -32,6 +32,7 @@ public sealed class WindowDetector(string rule, Func<LogEntry, bool> matches, in
         state.Samples.Enqueue(entry.Raw);
         while (state.Samples.Count > MaxSamples) state.Samples.Dequeue();
         while (state.Times.Count > 0 && entry.Time - state.Times.Peek() > window) state.Times.Dequeue();
+        while (state.Times.Count > MaxTimes(threshold)) state.Times.Dequeue();   // a long window must not hold every event of a flood
 
         if (state.Times.Count < threshold) return null;
         if (state.LastFired is { } last && entry.Time - last < cooldown) return null;
@@ -39,6 +40,9 @@ public sealed class WindowDetector(string rule, Func<LogEntry, bool> matches, in
         state.LastFired = entry.Time;
         return new Finding(rule, ip, entry.Time, state.Times.Count, window, state.Samples.ToArray());
     }
+
+    /// <summary>Only the newest few events matter for "threshold events within the window": keep a bounded number of them.</summary>
+    private static int MaxTimes(int threshold) => Math.Max(threshold * 4, 100);
 
     /// <summary>Forgets IPs that have been quiet for longer than the window and the cooldown, so memory stays bounded.</summary>
     private void Prune(DateTimeOffset now)

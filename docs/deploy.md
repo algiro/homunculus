@@ -259,9 +259,13 @@ Checklist before turning dry run off:
    pressed during testing can become a real block. Delete a stale `blocks.json` from a build older than this one before going
    live (`sudo rm /var/lib/homunculus-sec/blocks.json`), because that file held dry-run decisions. On start the service also
    skips any saved block whose address is on the never-block list.
-5. **Switch it on** by setting `HOMUNCULUS_SEC_DRY_RUN=false` in `/etc/homunculus-sec/env` (the environment overrides the config
+5. **Range blocks.** The service can block a whole network (`203.0.113.0/24`) when several addresses of it attack together, for at most
+   48 hours; the alert says so, and warns if an address of that range logged in successfully. A range is never offered if it touches
+   anything in `neverBlock`, so put the networks you log in from there, not just single addresses. `sudo iptables -S HOMUNCULUS-SEC`
+   shows such a block as `-s 203.0.113.0/24 -j DROP`. Test it by hand like a single address, using a /24 you control.
+6. **Switch it on** by setting `HOMUNCULUS_SEC_DRY_RUN=false` in `/etc/homunculus-sec/env` (the environment overrides the config
    file), then `sudo systemctl restart homunculus-sec`. The Telegram greeting then says "live: blocking with iptables".
-6. **Test with your phone** (not your usual address): provoke an alert, press **Block**, and check that the phone can no longer
+7. **Test with your phone** (not your usual address): provoke an alert, press **Block**, and check that the phone can no longer
    open the site or SSH in. `/unblock <ip>` brings it back, and so does waiting for the expiry.
 
 To go back to a safe state at any time: `HOMUNCULUS_SEC_DRY_RUN=true`, restart; and to remove every block at once,

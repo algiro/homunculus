@@ -1,4 +1,3 @@
-using System.Net;
 using Homunculus.Logging;
 using Homunculus.Sec.Analysis;
 using Homunculus.Sec.Firewall;
@@ -24,7 +23,7 @@ public sealed class ChatHandler(
     private static readonly string[] No = ["no", "n", "ignore", "skip", "cancel", "dismiss"];
 
     private const string Help =
-        "/pending – alerts waiting for an answer\n/blocks – addresses currently blocked\n/unblock &lt;ip&gt; – remove a block\n" +
+        "/pending – alerts waiting for an answer\n/blocks – addresses currently blocked\n/unblock &lt;ip or network&gt; – remove a block\n" +
         "Or reply yes / no to an alert, or ask a question about it.";
 
     public async Task HandleAsync(Update update, CancellationToken cancellation)
@@ -142,12 +141,12 @@ public sealed class ChatHandler(
 
     private async Task<string> UnblockAsync(string ip, CancellationToken cancellation)
     {
-        if (!IPAddress.TryParse(ip, out var address)) return "Usage: /unblock &lt;ip&gt;";
+        if (Cidr.Canonical(ip) is not { } target) return "Usage: /unblock &lt;ip or network&gt;";
         try
         {
-            return await blocks.UnblockAsync(address.ToString(), cancellation)
-                ? $"Unblocked <code>{AlertFormatter.Escape(address.ToString())}</code>."
-                : "That address is not blocked by this service.";
+            return await blocks.UnblockAsync(target, cancellation)
+                ? $"Unblocked <code>{AlertFormatter.Escape(target)}</code>."
+                : "That address or network is not blocked by this service.";
         }
         catch (FirewallException e)
         {

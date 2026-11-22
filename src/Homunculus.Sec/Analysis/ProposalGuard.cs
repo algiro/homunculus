@@ -6,6 +6,7 @@ namespace Homunculus.Sec.Analysis;
 public sealed class ProposalGuard(Allowlist allowlist, TimeSpan? maxBlock = null)
 {
     public static readonly TimeSpan DefaultBlock = TimeSpan.FromHours(24);
+    public static readonly TimeSpan NetworkMaxBlock = TimeSpan.FromHours(48);
 
     private readonly TimeSpan _max = maxBlock ?? TimeSpan.FromDays(7);
 
@@ -34,6 +35,9 @@ public sealed class ProposalGuard(Allowlist allowlist, TimeSpan? maxBlock = null
         }
 
         var blockFor = proposal.BlockFor <= TimeSpan.Zero ? DefaultBlock : proposal.BlockFor > _max ? _max : proposal.BlockFor;
+
+        // A network may hold innocent users, so a block of one is kept short; it can always be renewed.
+        if (Cidr.IsNetwork(proposal.Ip) && blockFor > NetworkMaxBlock) blockFor = NetworkMaxBlock;
         return proposal with { BlockFor = blockFor };
     }
 }
