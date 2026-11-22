@@ -216,7 +216,7 @@ The file contains your prompts and file contents, so keep it private (`*.jsonl` 
 
 ## homunculus-sec
 
-A second program in this repository, `src/Homunculus.Sec`, reuses the model client and the event log (now in `src/Homunculus.Core`) as a security watcher: it follows nginx and sshd logs, asks the model about suspicious activity, and sends an alert to Telegram. A firewall block (`ufw`) happens only after you approve it. See [docs/homunculus-sec.md](docs/homunculus-sec.md); deployment files are in `deploy/`.
+A second program in this repository, `src/Homunculus.Sec`, reuses the model client and the event log (now in `src/Homunculus.Core`) as a security watcher: it follows nginx and sshd logs, asks the model about suspicious activity, and sends an alert to Telegram. A firewall block (`ufw`) happens only after you approve it. How it works, what it does exactly and how the model is used: [src/Homunculus.Sec/README.md](src/Homunculus.Sec/README.md). Installing it: [docs/homunculus-sec.md](docs/homunculus-sec.md) and [docs/deploy.md](docs/deploy.md); the deployment files are in `deploy/`.
 
 ## Design
 

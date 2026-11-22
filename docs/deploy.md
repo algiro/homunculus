@@ -205,7 +205,7 @@ what is wrong instead of staying silent, and it stops with the error if one of i
 ## First end-to-end test (dry run)
 
 1. From a machine **whose address is not in `neverBlock`** (a phone on mobile data is ideal), request a few scanner paths on your
-   site: `https://your-site/.env`, `/wp-login.php`, `/phpmyadmin/`. Three probes within ten minutes fire `scanner_probe`.
+   site: `https://your-site/.env`, `/wp-login.php`, `/phpmyadmin/`. Three probes within an hour fire `web_scanner` (about 4 points per probe path, plus 1 for each miss, against a threshold of 10).
 2. After roughly a minute (the model needs about 30 to 60 s) an alert with **Block** and **Ignore** buttons arrives.
 3. Press **Block**. In dry run the decision is recorded but no firewall command runs: `/blocks` lists the address, and
    `/unblock <ip>` removes it again. While an address is "blocked" (even in dry run) it raises no new alerts.
