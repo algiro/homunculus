@@ -80,6 +80,12 @@ public sealed class Analyst(ILanguageModel model, IEventLog? log = null)
             log?.Write("analysis_failed", new { finding.Rule, finding.Ip, error = e.Message });
             return Fallback(finding);
         }
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+        {
+            // The HTTP client's own timeout (a stuck model server), not a shutdown: the alert must still go out.
+            log?.Write("analysis_timed_out", new { finding.Rule, finding.Ip });
+            return Fallback(finding);
+        }
 
         var call = reply.Message.ToolCalls?.FirstOrDefault(c => c.Name == ToolName);
         if (call is null || Parse(finding, call.Arguments) is not { } proposal)
@@ -115,6 +121,11 @@ public sealed class Analyst(ILanguageModel model, IEventLog? log = null)
         {
             log?.Write("answer_failed", new { error = e.Message });
             return "The model is not available right now.";
+        }
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+        {
+            log?.Write("answer_timed_out");
+            return "The model did not answer in time.";
         }
     }
 
