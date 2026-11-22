@@ -16,6 +16,10 @@ public static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        if (args is ["--replay", { } file, ..var options])
+            return RunReplay(file, options.Contains("--summaries"));
+
+
         var path = args.Length > 0 ? args[0] : File.Exists(DefaultConfig) ? DefaultConfig : File.Exists("homunculus-sec.json") ? "homunculus-sec.json" : null;
 
         SecSettings settings;
@@ -59,6 +63,19 @@ public static class Program
         }
 
         Console.WriteLine("homunculus-sec stopped.");
+        return 0;
+    }
+
+    /// <summary>Runs a log through the detectors and prints what would have been reported. Needs no settings, token or model.</summary>
+    private static int RunReplay(string file, bool showSummaries)
+    {
+        if (!File.Exists(file))
+        {
+            Console.Error.WriteLine($"No such file: {file}");
+            return 2;
+        }
+
+        Console.Write(Replay.Describe(Replay.Run(File.ReadLines(file)), showSummaries));
         return 0;
     }
 
