@@ -99,7 +99,7 @@ public class LogTailerTests
         var found = new TaskCompletionSource<Finding>();
         var watcher = new LogWatcher(
             [new WatchedLog(new LogTailer(_file, TimeSpan.FromMilliseconds(20), fromStart: true), new NginxAccessParser())],
-            DefaultDetectors.Create(new DetectorOptions { ProbeCount = 2 }),
+            DefaultDetectors.Create(),
             finding =>
             {
                 found.TrySetResult(finding);
@@ -119,7 +119,7 @@ public class LogTailerTests
         await cancellation.CancelAsync();
         await run;
 
-        Assert.That(finding.Rule, Is.EqualTo(DefaultDetectors.ScannerProbe));
+        Assert.That(finding.Rule, Is.EqualTo(DefaultDetectors.WebScanner));
         Assert.That(finding.Ip, Is.EqualTo("203.0.113.9"));
     }
 }

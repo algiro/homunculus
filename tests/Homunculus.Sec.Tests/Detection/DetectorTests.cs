@@ -92,7 +92,7 @@ public class DetectorTests
     }
 
     [Test]
-    public void ScannerProbe_FiresOnRepeatedProbePaths()
+    public void WebScanner_FiresOnRepeatedProbePaths()
     {
         var detectors = DefaultDetectors.Create();
         var findings = new[] { "/.env", "/wp-login.php", "/phpmyadmin/index.php" }
@@ -100,11 +100,11 @@ public class DetectorTests
             .SelectMany(found => found)
             .ToList();
 
-        Assert.That(findings.Select(f => f.Rule), Does.Contain(DefaultDetectors.ScannerProbe));
+        Assert.That(findings.Select(f => f.Rule), Does.Contain(DefaultDetectors.WebScanner));
     }
 
     [Test]
-    public void ScannerProbe_IgnoresOrdinaryPaths()
+    public void WebScanner_IgnoresOrdinaryPaths()
     {
         var detectors = DefaultDetectors.Create();
 
