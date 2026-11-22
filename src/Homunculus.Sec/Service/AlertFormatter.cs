@@ -29,8 +29,8 @@ public static class AlertFormatter
 
     public static IReadOnlyList<Button> Buttons(Incident incident) =>
     [
-        new Button($"✅ Block {Duration(incident.Proposal.BlockFor)}", $"a:{incident.Id}"),
-        new Button("🚫 Ignore", $"i:{incident.Id}"),
+        new Button($"✅ Block {Duration(incident.Proposal.BlockFor)}", $"a:{incident.Token}"),
+        new Button("🚫 Ignore", $"i:{incident.Token}"),
     ];
 
     public static string Duration(TimeSpan span) =>

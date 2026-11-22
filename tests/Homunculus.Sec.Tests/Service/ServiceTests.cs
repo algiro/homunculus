@@ -67,7 +67,7 @@ public class ServiceTests
 
         var sent = _telegram.Sent.Single();
         Assert.That(sent.Html, Does.Contain("203.0.113.5").And.Contain("Scanning").And.Contain("12h"));
-        Assert.That(sent.Buttons!.Select(b => b.Data), Is.EqualTo(new[] { $"a:{incident.Id}", $"i:{incident.Id}" }));
+        Assert.That(sent.Buttons!.Select(b => b.Data), Is.EqualTo(new[] { $"a:{incident.Token}", $"i:{incident.Token}" }));
         Assert.That(incident.MessageId, Is.Not.Null);
     }
 
@@ -85,7 +85,7 @@ public class ServiceTests
     {
         var incident = await RaiseAlertAsync();
 
-        await _chat.HandleAsync(Press($"a:{incident.Id}"), CancellationToken.None);
+        await _chat.HandleAsync(Press($"a:{incident.Token}"), CancellationToken.None);
 
         Assert.That(_firewall.Actions, Is.EqualTo(new[] { "block 203.0.113.5" }));
         Assert.That(incident.Status, Is.EqualTo(IncidentStatus.Approved));
@@ -98,7 +98,7 @@ public class ServiceTests
     {
         var incident = await RaiseAlertAsync();
 
-        await _chat.HandleAsync(Press($"i:{incident.Id}"), CancellationToken.None);
+        await _chat.HandleAsync(Press($"i:{incident.Token}"), CancellationToken.None);
 
         Assert.That(_firewall.Actions, Is.Empty);
         Assert.That(incident.Status, Is.EqualTo(IncidentStatus.Dismissed));
@@ -117,6 +117,19 @@ public class ServiceTests
     }
 
     [Test]
+    public async Task AYesRepliedToAnOldMessageNeverApprovesADifferentAlert()
+    {
+        var current = await RaiseAlertAsync("203.0.113.5");
+
+        // Replying to message 9999, which is no alert of this run (an alert from before a restart, say).
+        await _chat.HandleAsync(Text("yes", replyTo: 9999), CancellationToken.None);
+
+        Assert.That(current.Status, Is.EqualTo(IncidentStatus.Pending));
+        Assert.That(_firewall.Actions, Is.Empty);
+        Assert.That(_telegram.Sent.Last().Html, Does.Contain("not an active alert"));
+    }
+
+    [Test]
     public async Task AnUnrepliedYesApprovesTheLatestPendingIncident()
     {
         await RaiseAlertAsync("203.0.113.5");
@@ -129,12 +142,44 @@ public class ServiceTests
     }
 
     [Test]
+    public async Task AButtonFromBeforeARestartCannotActOnADifferentAlertThatReusedItsNumber()
+    {
+        // Alert #1 of the previous run, still on screen in Telegram: its button data is whatever the old process put in it.
+        var previousRun = new IncidentBook();
+        var oldAlert = previousRun.Add(BlockProposal("203.0.113.9"));
+
+        // The service restarted: a new run, and its own alert #1 is about another address.
+        var current = await RaiseAlertAsync("203.0.113.5");
+
+        await _chat.HandleAsync(Press(AlertFormatter.Buttons(oldAlert)[0].Data), CancellationToken.None);
+
+        Assert.That(current.Status, Is.EqualTo(IncidentStatus.Pending));
+        Assert.That(_firewall.Actions, Is.Empty);
+        Assert.That(_telegram.Answers.Last(), Does.Contain("restarted"));
+    }
+
+    [Test]
+    public async Task AButtonForAnAlertTheServiceNoLongerKnowsIsExplainedAndRemoved()
+    {
+        var oldAlert = new IncidentBook().Add(BlockProposal("203.0.113.9"));
+        var press = new Update(1, null, new ButtonPress("p1", Chat, Chat, 55, AlertFormatter.Buttons(oldAlert)[0].Data));
+
+        await _chat.HandleAsync(press, CancellationToken.None);
+
+        Assert.That(_telegram.Answers.Last(), Does.Contain("restarted"));
+        Assert.That(_telegram.Cleared, Is.EqualTo(new long[] { 55 }));
+    }
+
+    private static Proposal BlockProposal(string ip) => new(
+        Finding(ip), Severity.High, ActionKind.BlockIp, TimeSpan.FromHours(2), "s", "r");
+
+    [Test]
     public async Task AnAlertCannotBeApprovedTwice()
     {
         var incident = await RaiseAlertAsync();
 
-        await _chat.HandleAsync(Press($"a:{incident.Id}"), CancellationToken.None);
-        await _chat.HandleAsync(Press($"a:{incident.Id}"), CancellationToken.None);
+        await _chat.HandleAsync(Press($"a:{incident.Token}"), CancellationToken.None);
+        await _chat.HandleAsync(Press($"a:{incident.Token}"), CancellationToken.None);
 
         Assert.That(_firewall.Actions, Has.Count.EqualTo(1));
         Assert.That(_telegram.Answers.Last(), Does.Contain("already"));
@@ -195,7 +240,7 @@ public class ServiceTests
         var incident = await RaiseAlertAsync();
 
         await _chat.HandleAsync(Text("yes", from: 666, chat: 666), CancellationToken.None);
-        await _chat.HandleAsync(Press($"a:{incident.Id}", from: 666), CancellationToken.None);
+        await _chat.HandleAsync(Press($"a:{incident.Token}", from: 666), CancellationToken.None);
         await _chat.HandleAsync(Text("yes", from: 666, chat: Chat), CancellationToken.None);
 
         Assert.That(incident.Status, Is.EqualTo(IncidentStatus.Pending));
@@ -242,7 +287,7 @@ public class ServiceTests
         using var failing = new BlockManager(new ThrowingFirewall(), Path.Combine(_dir, "other.json"));
         var chat = new ChatHandler(_telegram, Chat, _book, failing, new Analyst(_model), new Allowlist());
 
-        await chat.HandleAsync(Press($"a:{incident.Id}"), CancellationToken.None);
+        await chat.HandleAsync(Press($"a:{incident.Token}"), CancellationToken.None);
 
         Assert.That(incident.Status, Is.EqualTo(IncidentStatus.Pending));
         Assert.That(_telegram.Answers.Last(), Does.Contain("Could not block"));

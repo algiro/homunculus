@@ -54,7 +54,10 @@ public sealed class ChatHandler(
         var incident = parts.Length == 2 ? book.Find(parts[1]) : null;
         if (incident is null)
         {
-            await telegram.AnswerPressAsync(press.Id, "Unknown alert.", cancellation);
+            // Almost always a button on an alert from before the service restarted: alerts waiting for an answer are kept in memory.
+            log?.Write("telegram_press_unknown", new { press.Data });
+            await telegram.AnswerPressAsync(press.Id, "This alert is from before the service restarted and is no longer active. A new alert will come if it happens again.", cancellation);
+            await ClearButtonsQuietlyAsync(press.ChatId, press.MessageId, cancellation);
             return;
         }
 
@@ -78,9 +81,18 @@ public sealed class ChatHandler(
             return;
         }
 
-        var target = (message.ReplyToMessageId is { } replied ? book.FindByMessage(replied) : null) ?? book.LatestPending();
+        var repliedTo = message.ReplyToMessageId is { } replied ? book.FindByMessage(replied) : null;
+        var target = repliedTo ?? book.LatestPending();
         if (Yes.Contains(word) || No.Contains(word))
         {
+            if (message.ReplyToMessageId is not null && repliedTo is null)
+            {
+                // Answering a message that is not one of this run's alerts (an alert from before a restart, for example) must never fall
+                // through to a different alert.
+                await Say("That message is not an active alert (alerts do not survive a restart of the service). Reply to a current alert, or send yes / no on its own for the latest one.", cancellation);
+                return;
+            }
+
             if (target is null)
             {
                 await Say("There is no alert waiting for an answer.", cancellation);
@@ -179,16 +191,18 @@ public sealed class ChatHandler(
     private async Task Close(Incident incident, IncidentStatus status, CancellationToken cancellation)
     {
         incident.Status = status;
-        if (incident.MessageId is { } id)
+        if (incident.MessageId is { } id) await ClearButtonsQuietlyAsync(chatId, id, cancellation);
+    }
+
+    private async Task ClearButtonsQuietlyAsync(long chat, long messageId, CancellationToken cancellation)
+    {
+        try
         {
-            try
-            {
-                await telegram.ClearButtonsAsync(chatId, id, cancellation);
-            }
-            catch (TelegramException e)
-            {
-                log?.Write("telegram_clear_failed", new { error = e.Message });
-            }
+            await telegram.ClearButtonsAsync(chat, messageId, cancellation);
+        }
+        catch (TelegramException e)
+        {
+            log?.Write("telegram_clear_failed", new { error = e.Message });
         }
     }
 
