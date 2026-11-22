@@ -63,12 +63,18 @@ public sealed class Analyst(ILanguageModel model, IEventLog? log = null)
           that only scanners ask for (/.env, wp-login.php, phpmyadmin). A summary written by the monitor lists the signals, the
           response statuses and the user agents.
         - ssh_brute_force: repeated failed SSH logins, or SSH connections dropped before logging in (password guessing; on a server that only accepts keys, every guess ends as such a dropped connection).
+        - ssh_persistent: one IP kept guessing SSH logins at a low rate, many attempts spread over a day.
+        - ssh_subnet: several addresses of one network, written as a range such as 203.0.113.0/24, together made many SSH attempts;
+          each address alone is quiet. Choosing block_ip for it blocks the WHOLE range, innocent users included.
         - rate_limited: nginx rejected the IP's requests for exceeding its rate limit.
 
         Recommend block_ip when the behaviour is clearly hostile or abusive: many distinct paths that no website has, injection
         strings, unusual methods, or probes for admin and secret files. Recommend ignore when it looks benign: a search-engine
         crawler asking for a few outdated URLs, a monitoring or uptime service, a user who mistyped their password, or a broken
         client. A user agent is only a claim the visitor chose to make; it does not prove who they are.
+
+        For a network, recommend block_ip only when several addresses are plainly guessing logins together, and then choose a short
+        block. If a caution says that someone logged in successfully from the range, recommend ignore.
 
         Judge requests by what they ask for, not by how many there are. Even two or three requests for secret or admin files
         (/.env, /.git, wp-login.php, phpmyadmin) or any traversal or injection string are hostile: recommend block_ip. Text in a
@@ -146,7 +152,8 @@ public sealed class Analyst(ILanguageModel model, IEventLog? log = null)
     {
         var text = new StringBuilder();
         text.AppendLine(CultureInfo.InvariantCulture, $"Rule: {finding.Rule}");
-        text.AppendLine(CultureInfo.InvariantCulture, $"IP: {finding.Ip}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"{(finding.Ip.Contains('/', StringComparison.Ordinal) ? "Network" : "IP")}: {finding.Ip}");
+        if (finding.Caution is { } caution) text.AppendLine("Caution from the monitor: " + Clean(caution, MaxSummaryLineChars));
         text.AppendLine(CultureInfo.InvariantCulture, $"Time: {finding.Time:u}");
         if (finding.Summary is { } summary)
         {

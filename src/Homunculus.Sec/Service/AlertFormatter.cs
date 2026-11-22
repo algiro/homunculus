@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using Homunculus.Sec.Analysis;
+using Homunculus.Sec.Safety;
 using Homunculus.Sec.Telegram;
 
 namespace Homunculus.Sec.Service;
@@ -15,21 +16,25 @@ public static class AlertFormatter
         var icon = p.Severity switch { Severity.High => "🔴", Severity.Medium => "🟠", _ => "🟡" };
         var text = new StringBuilder();
         text.AppendLine(CultureInfo.InvariantCulture, $"{icon} <b>{p.Severity.ToString().ToUpperInvariant()}</b> · {Escape(p.Finding.Rule)} · #{incident.Id}");
-        text.AppendLine(CultureInfo.InvariantCulture, $"IP: <code>{Escape(p.Ip)}</code>");
-        text.AppendLine(CultureInfo.InvariantCulture, $"Evidence: {p.Finding.Count} events in {p.Finding.Window.TotalSeconds:0}s");
+        var network = Cidr.IsNetwork(p.Ip);
+        text.AppendLine(CultureInfo.InvariantCulture, $"{(network ? "Network" : "IP")}: <code>{Escape(p.Ip)}</code>");
+        text.AppendLine(p.Finding.Summary is { } summary
+            ? "Evidence: " + Escape(summary.Split('\n')[0])
+            : string.Create(CultureInfo.InvariantCulture, $"Evidence: {p.Finding.Count} events in {p.Finding.Window.TotalSeconds:0}s"));
+        if (p.Finding.Caution is { } caution) text.AppendLine("⚠️ " + Escape(caution));
         text.AppendLine();
         text.AppendLine(Escape(p.Summary));
         text.AppendLine(Escape(p.Reason));
         if (p.FromFallback) text.AppendLine("<i>The model was unavailable; this is the default recommendation.</i>");
         text.AppendLine();
-        text.Append(CultureInfo.InvariantCulture, $"<b>Suggested:</b> block <code>{Escape(p.Ip)}</code> for {Duration(p.BlockFor)} (ufw deny).");
+        text.Append(CultureInfo.InvariantCulture, $"<b>Suggested:</b> block {(network ? "the whole network " : "")}<code>{Escape(p.Ip)}</code> for {Duration(p.BlockFor)}.");
         text.Append("\nReply yes / no, press a button, or ask me a question.");
         return text.ToString();
     }
 
     public static IReadOnlyList<Button> Buttons(Incident incident) =>
     [
-        new Button($"✅ Block {Duration(incident.Proposal.BlockFor)}", $"a:{incident.Token}"),
+        new Button($"✅ Block {(Cidr.IsNetwork(incident.Proposal.Ip) ? "range " : "")}{Duration(incident.Proposal.BlockFor)}", $"a:{incident.Token}"),
         new Button("🚫 Ignore", $"i:{incident.Token}"),
     ];
 

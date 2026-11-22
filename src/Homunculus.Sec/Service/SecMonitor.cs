@@ -65,7 +65,7 @@ public sealed class SecMonitor(
     public async Task OnFindingAsync(Finding finding, CancellationToken cancellation)
     {
         log?.Write("finding", new { finding.Rule, finding.Ip, finding.Count });
-        if (blocks.IsBlocked(finding.Ip) || book.HasPendingFor(finding.Ip)) return;
+        if (blocks.IsCovered(finding.Ip) || book.HasPendingCovering(finding.Ip)) return;
 
         var proposal = guard.Apply(await analyst.AnalyzeAsync(finding, cancellation));
         if (proposal.Action == ActionKind.Ignore)

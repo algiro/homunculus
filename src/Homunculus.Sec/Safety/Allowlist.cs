@@ -22,9 +22,17 @@ public sealed class Allowlist
         _networks = BuiltIn.Concat(extra ?? []).Select(Parse).ToList();
     }
 
-    /// <summary>True when the address is protected, or when it is not a valid IP at all (anything unparseable is never acted on).</summary>
-    public bool IsProtected(string ip)
+    /// <summary>
+    /// True when the target is protected, or when it is not a valid address or network at all (anything unparseable is never acted on).
+    /// A network is protected when it shares any address with a protected one, and when it is wider than blocking allows (a /24, or a /48
+    /// for IPv6).
+    /// </summary>
+    public bool IsProtected(string target)
     {
+        if (Cidr.IsNetwork(target))
+            return !Cidr.TryParse(target, out var network) || !Cidr.IsNarrowEnough(network) || _networks.Any(protectedNetwork => Cidr.Overlaps(protectedNetwork, network));
+
+        var ip = target;
         if (!IPAddress.TryParse(ip, out var address)) return true;
         if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
         return _networks.Any(network => network.Contains(address));

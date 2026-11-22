@@ -174,6 +174,89 @@ public class ServiceTests
         Finding(ip), Severity.High, ActionKind.BlockIp, TimeSpan.FromHours(2), "s", "r");
 
     [Test]
+    public async Task ANetworkAlertSaysSoAndOffersToBlockTheRange()
+    {
+        var incident = await RaiseAlertAsync("8.8.8.0/24");
+
+        var sent = _telegram.Sent.Single();
+        Assert.That(sent.Html, Does.Contain("Network: <code>8.8.8.0/24</code>").And.Contain("the whole network"));
+        Assert.That(sent.Buttons![0].Text, Does.Contain("range"));
+        Assert.That(incident.Proposal.Ip, Is.EqualTo("8.8.8.0/24"));
+    }
+
+    [Test]
+    public async Task ApprovingANetworkAlertBlocksTheRange()
+    {
+        var incident = await RaiseAlertAsync("8.8.8.0/24");
+
+        await _chat.HandleAsync(Press($"a:{incident.Token}"), CancellationToken.None);
+
+        Assert.That(_firewall.Actions, Is.EqualTo(new[] { "block 8.8.8.0/24" }));
+        Assert.That(_blocks.IsCovered("8.8.8.200"), Is.True);
+    }
+
+    [Test]
+    public async Task ANetworkThatTouchesANeverBlockAddressIsNeverOfferedForBlocking()
+    {
+        var allowlist = new Allowlist(["8.8.8.77"]);
+        var analyst = new Analyst(_model);
+        var monitor = new SecMonitor([], [], analyst, new ProposalGuard(allowlist), _book, _telegram, Chat, _blocks, _chat);
+        _model.Verdict = """{"severity":"high","action":"block_ip","summary":"s","reason":"r"}""";
+
+        await monitor.OnFindingAsync(Finding("8.8.8.0/24"), CancellationToken.None);
+
+        Assert.That(_telegram.Sent, Is.Empty);
+    }
+
+    [Test]
+    public async Task AnAddressInsideABlockedRangeRaisesNoNewAlert()
+    {
+        await _blocks.BlockAsync("8.8.8.0/24", TimeSpan.FromHours(1), "range", CancellationToken.None);
+
+        await _monitor.OnFindingAsync(Finding("8.8.8.9"), CancellationToken.None);
+
+        Assert.That(_telegram.Sent, Is.Empty);
+    }
+
+    [Test]
+    public async Task AnAddressInsideARangeWithAPendingAlertRaisesNoSecondAlert()
+    {
+        await RaiseAlertAsync("8.8.8.0/24");
+
+        await _monitor.OnFindingAsync(Finding("8.8.8.9"), CancellationToken.None);
+
+        Assert.That(_telegram.Sent, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task UnblockCommandRemovesABlockedRange()
+    {
+        await _blocks.BlockAsync("8.8.8.0/24", TimeSpan.FromHours(1), "range", CancellationToken.None);
+
+        await _chat.HandleAsync(Text("/unblock 8.8.8.0/24"), CancellationToken.None);
+
+        Assert.That(_blocks.IsBlocked("8.8.8.0/24"), Is.False);
+        Assert.That(_firewall.Actions, Is.EqualTo(new[] { "block 8.8.8.0/24", "unblock 8.8.8.0/24" }));
+    }
+
+    [Test]
+    public async Task UnblockCommandRefusesAWideRange()
+    {
+        await _chat.HandleAsync(Text("/unblock 8.0.0.0/8"), CancellationToken.None);
+
+        Assert.That(_telegram.Sent.Single().Html, Does.Contain("Usage"));
+    }
+
+    [Test]
+    public void TheAlertWarnsWhenSomeoneLoggedInFromTheRange()
+    {
+        var finding = Finding("8.8.8.0/24") with { Caution = "1 address(es) of this network logged in successfully within the window. Blocking the whole network would cut them off." };
+        var incident = new IncidentBook().Add(BlockProposal("8.8.8.0/24") with { Finding = finding });
+
+        Assert.That(AlertFormatter.Alert(incident), Does.Contain("⚠️").And.Contain("cut them off"));
+    }
+
+    [Test]
     public async Task AnAlertCannotBeApprovedTwice()
     {
         var incident = await RaiseAlertAsync();

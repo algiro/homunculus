@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Homunculus.Logging;
+using Homunculus.Sec.Safety;
 
 namespace Homunculus.Sec.Firewall;
 
@@ -43,6 +44,12 @@ public sealed class BlockManager : IDisposable
     public bool IsBlocked(string ip)
     {
         lock (_blocks) return _blocks.ContainsKey(ip);
+    }
+
+    /// <summary>True when the address or network is blocked itself or lies inside a blocked network.</summary>
+    public bool IsCovered(string target)
+    {
+        lock (_blocks) return _blocks.ContainsKey(target) || _blocks.Keys.Any(block => Cidr.Covers(block, target));
     }
 
     /// <summary>Blocks the address for <paramref name="duration"/> (null: for good). Blocking an address that is already blocked only extends it.</summary>

@@ -90,6 +90,57 @@ public class FirewallTests
     }
 
     [Test]
+    public async Task Iptables_PassesANetworkToItsWrapperInCanonicalForm()
+    {
+        var runner = new FakeRunner();
+
+        await new IptablesFirewall(runner).BlockAsync("8.8.8.0/24", CancellationToken.None);
+
+        Assert.That(runner.Calls.Single(), Is.EqualTo("sudo -n /usr/local/sbin/homunculus-sec-fw block 8.8.8.0/24"));
+    }
+
+    [TestCase("8.8.8.0/23")]
+    [TestCase("8.8.8.5/24")]
+    [TestCase("8.8.8.8/32")]
+    [TestCase("8.8.8.0/24; reboot")]
+    public void Iptables_RefusesNetworksThatAreTooWideOrNotCanonical(string network)
+    {
+        var runner = new FakeRunner();
+
+        Assert.ThrowsAsync<FirewallException>(() => new IptablesFirewall(runner).BlockAsync(network, CancellationToken.None));
+
+        Assert.That(runner.Calls, Is.Empty);
+    }
+
+    [Test]
+    public async Task Manager_ABlockedNetworkCoversEveryAddressInsideIt()
+    {
+        using var manager = new BlockManager(new DryRunFirewall(), _state);
+        await manager.BlockAsync("8.8.8.0/24", TimeSpan.FromHours(1), "range", CancellationToken.None);
+        await manager.BlockAsync("1.1.1.1", TimeSpan.FromHours(1), "single", CancellationToken.None);
+
+        Assert.That(manager.IsCovered("8.8.8.77"), Is.True);
+        Assert.That(manager.IsCovered("8.8.8.0/24"), Is.True);
+        Assert.That(manager.IsCovered("8.8.9.77"), Is.False);
+        Assert.That(manager.IsCovered("1.1.1.1"), Is.True);
+        Assert.That(manager.IsCovered("1.1.1.2"), Is.False);
+        Assert.That(manager.IsBlocked("8.8.8.77"), Is.False);
+    }
+
+    [Test]
+    public async Task Manager_RestoreAppliesNetworkBlocksToo()
+    {
+        using (var first = new BlockManager(new DryRunFirewall(), _state))
+            await first.BlockAsync("8.8.8.0/24", TimeSpan.FromHours(5), "range", CancellationToken.None);
+
+        var firewall = new DryRunFirewall();
+        using var second = new BlockManager(firewall, _state);
+        await second.RestoreAsync(CancellationToken.None);
+
+        Assert.That(firewall.Actions, Is.EqualTo(new[] { "block 8.8.8.0/24" }));
+    }
+
+    [Test]
     public void Ufw_ReportsAFailure()
     {
         var runner = new FakeRunner((_, _) => new ProcessResult(1, "sudo: a password is required"));

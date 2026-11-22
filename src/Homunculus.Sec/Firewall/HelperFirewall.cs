@@ -1,4 +1,4 @@
-using System.Net;
+using Homunculus.Sec.Safety;
 
 namespace Homunculus.Sec.Firewall;
 
@@ -23,8 +23,8 @@ public abstract class HelperFirewall(IProcessRunner runner, string helperPath) :
             throw new FirewallException($"Could not {action} {address}: {result.Output}");
     }
 
-    private static string Canonical(string ip) =>
-        IPAddress.TryParse(ip, out var address) ? address.ToString() : throw new FirewallException($"'{ip}' is not an IP address.");
+    private static string Canonical(string target) =>
+        Cidr.Canonical(target) ?? throw new FirewallException($"'{target}' is not an IP address or a network of at most /{Cidr.WidestPrefixV4} (IPv4) or /{Cidr.WidestPrefixV6} (IPv6) size.");
 }
 
 /// <summary>

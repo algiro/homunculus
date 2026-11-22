@@ -97,5 +97,23 @@ check "usage: no arguments" 64 "$(run)"
 check "usage: unknown action" 64 "$(run nuke 8.8.8.8)"
 check "usage: too many arguments" 64 "$(run block 8.8.8.8 extra)"
 
+# ---- networks -----------------------------------------------------------------------------------------------------------
+reset "INPUT DOCKER-USER"
+check "block a /24" 0 "$(run block 8.8.8.0/24)"
+check "block the same /24 again" 0 "$(run block 8.8.8.0/24)"
+check "block a second /24" 0 "$(run block 1.1.1.0/24)"
+expect_state "networks are one DROP rule each, no duplicates" v4   '{"DOCKER-USER": ["-j HOMUNCULUS-SEC"], "HOMUNCULUS-SEC": ["-s 8.8.8.0/24 -j DROP", "-s 1.1.1.0/24 -j DROP"], "INPUT": ["-j HOMUNCULUS-SEC"]}'
+check "unblock the first /24" 0 "$(run unblock 8.8.8.0/24)"
+expect_state "only that network removed" v4   '{"DOCKER-USER": ["-j HOMUNCULUS-SEC"], "HOMUNCULUS-SEC": ["-s 1.1.1.0/24 -j DROP"], "INPUT": ["-j HOMUNCULUS-SEC"]}'
+check "block a public ipv6 /48" 0 "$(run block 2606:4700:4700::/48)"
+expect_state "ipv6 network goes to the ip6tables family" v6   '{"DOCKER-USER": ["-j HOMUNCULUS-SEC"], "HOMUNCULUS-SEC": ["-s 2606:4700:4700::/48 -j DROP"], "INPUT": ["-j HOMUNCULUS-SEC"]}'
+
+reset "INPUT DOCKER-USER"
+for bad in 8.8.8.0/23 8.0.0.0/8 0.0.0.0/0 ::/0 8.8.8.5/24 8.8.8.0/33 8.8.8.0/32 8.8.8.8/32 8.8.8.0/024            10.0.0.0/24 192.168.1.0/24 172.16.5.0/24 127.0.0.0/24 169.254.1.0/24 100.64.0.0/24 224.0.0.0/24 240.0.0.0/24 203.0.113.0/24            91.98.81.0/24 2a01:4f8:c012:721c::/64 2606:4700::/32 fe80::/64 fc00::/48 "8.8.8.0/24;reboot" "8.8.8.0/ 24"; do
+  check "refuse network [$bad]" 65 "$(run block "$bad")"
+done
+expect_state "nothing changed by any refused network (v4)" v4 '{"DOCKER-USER": [], "INPUT": []}'
+expect_state "nothing changed by any refused network (v6)" v6 '{"DOCKER-USER": [], "INPUT": []}'
+
 echo "passed $pass, failed $fail"
 [ "$fail" -eq 0 ]

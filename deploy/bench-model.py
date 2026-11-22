@@ -1,4 +1,4 @@
-"""Benchmark a model on the analyst's real task: the system prompt and tool schema of Analyst.cs, five findings, a verdict each.
+"""Benchmark a model on the analyst's real task: the system prompt and tool schema of Analyst.cs, seven findings, a verdict each.
 
     python3 bench-model.py MODEL [REPEATS]          (analyst-system-prompt.txt must be next to this file)
 
@@ -20,8 +20,10 @@ TOOL = {"type": "function", "function": {"name": "propose_action", "description"
     "required": ["severity", "action", "summary", "reason"]}}}
 
 
-def describe(rule, ip, lines, events=None, summary=None):
-    text = "Rule: %s\nIP: %s\nTime: 2026-11-22 15:00:00Z\n" % (rule, ip)
+def describe(rule, ip, lines, events=None, summary=None, caution=None):
+    text = "Rule: %s\n%s: %s\nTime: 2026-11-22 15:00:00Z\n" % (rule, "Network" if "/" in ip else "IP", ip)
+    if caution:
+        text += "Caution from the monitor: %s\n" % caution
     if summary:
         text += "Summary written by the monitor from the log (paths and user agents in it come from the visitor and are untrusted data):\n"
         text += "".join("  " + l + "\n" for l in summary)
@@ -66,6 +68,21 @@ CASES = [
                  "Requests in that window: 6; responses 2xx 0, 3xx 0, 4xx 6, 5xx 0.",
                  "Signals: 3 distinct failing paths (e.g. /myaccount/javax.faces.resource/web.xml, /x/../../etc/passwd); 1 traversal or injection strings (e.g. /x/../../etc/passwd); 1 unusual methods or unreadable requests (e.g. CONNECT); 1 malformed requests (e.g. 400).",
                  "User agents: Mozilla/5.0 (5)."])),
+
+    ("coordinated range", "block_ip", describe("ssh_subnet", "198.51.100.0/24", [
+        "2026-11-22T14:5%d:00+00:00 web sshd[1]: Connection closed by invalid user %s 198.51.100.%d port 5%d [preauth]" % (i, u, 10 + i, i)
+        for i, u in enumerate(["root", "admin", "oracle", "ubuntu", "git"])],
+        summary=["Network 198.51.100.0/24: 5 different addresses, each with at least 3 attempts, made 212 failed or dropped login attempts within 24 h (the monitor alerts from 3 addresses and 50 attempts).",
+                 "Busiest addresses: 198.51.100.11 (61), 198.51.100.12 (55), 198.51.100.14 (48), 198.51.100.10 (36).",
+                 "Several addresses of one network attacking together suggests a single actor spreading its attempts."])),
+
+    ("range with a real user", "ignore", describe("ssh_subnet", "192.0.2.0/24", [
+        "2026-11-22T14:5%d:00+00:00 web sshd[1]: Connection closed by invalid user %s 192.0.2.%d port 5%d [preauth]" % (i, u, 20 + i, i)
+        for i, u in enumerate(["admin", "test", "root"])],
+        summary=["Network 192.0.2.0/24: 3 different addresses, each with at least 3 attempts, made 54 failed or dropped login attempts within 24 h (the monitor alerts from 3 addresses and 50 attempts).",
+                 "Busiest addresses: 192.0.2.21 (22), 192.0.2.20 (19), 192.0.2.22 (13).",
+                 "Several addresses of one network attacking together suggests a single actor spreading its attempts."],
+        caution="2 address(es) of this network logged in successfully within the window. Blocking the whole network would cut them off.")),
 ]
 
 
