@@ -264,7 +264,9 @@ restore, the settings, and the shipped example configuration.
 ## Limits
 
 - Detection thresholds and the score weights are fixed in code for now (`DetectorOptions`, `WebScannerDetector`); tune them with `--replay`.
-- Pending alerts are kept in memory and are lost on restart; active blocks are saved.
+- Pending alerts are kept in memory and are lost on restart; active blocks are saved. A button or a reply on an alert from before a
+  restart is refused with an explanation and the buttons are removed (each run puts its own random token in the button data, so an old
+  button can never act on a newer alert that reused the number).
 - Only the nginx combined log format and `sshd` lines are understood.
 - Behind a CDN or reverse proxy the logged address is the proxy's: fix nginx's `real_ip` and add the proxy ranges to `neverBlock`.
 - Rate-limiting a single address (as opposed to blocking it) is not offered.
